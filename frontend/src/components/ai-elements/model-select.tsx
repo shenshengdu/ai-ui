@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { formatProviderSelectLabel } from "@/lib/api/providers";
+import { getModelTags } from "@/lib/model-tags";
 
 export interface ModelOption {
   id: string;
@@ -125,11 +126,27 @@ export const ModelSelect = ({
                 value={modelOption.id}
                 className="rounded-lg px-3 py-2.5 text-sm leading-5 focus:bg-muted-foreground/10"
               >
-                <div className="max-w-[280px] overflow-hidden text-ellipsis text-nowrap select-none translate-y-[-2px]">
-                  <span className="font-medium">{modelOption.name}</span>{" "}
-                  <span className="text-xs text-muted-foreground">
+                <div className="max-w-[340px] overflow-hidden select-none translate-y-[-2px]">
+                  <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                    <span className="font-medium truncate">
+                      {modelOption.name}
+                    </span>
+
+                    <div className="flex items-center gap-1 flex-wrap flex-shrink-0">
+                      {getModelTags(modelOption).map((tag) => (
+                        <span
+                          key={tag.label}
+                          className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap ${tag.className}`}
+                        >
+                          {tag.label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="text-xs text-muted-foreground truncate">
                     {formatProviderSelectLabel(modelOption.provider)}
-                  </span>
+                  </div>
                 </div>
               </SelectItem>
             ))}
