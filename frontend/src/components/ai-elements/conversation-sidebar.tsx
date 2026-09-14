@@ -394,7 +394,7 @@ export const ConversationSidebar = ({
               className="hover:bg-accent"
             >
               <SidebarIcon className="size-4 mr-1 text-foreground/80" />
-              <h2 className="text-xl font-bold text-foreground/80">AI Chat</h2>
+              <h2 className="text-xl font-bold text-foreground/80">SSD AI</h2>
               <span className="ml-1 mt-3 text-[10px] text-muted-foreground tracking-wide font-light">
                 v{__APP_VERSION__}
               </span>

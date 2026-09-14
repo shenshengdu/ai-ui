@@ -149,7 +149,7 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
                   className="fill-background"
                 />
               </svg>
-              <h1 className="text-2xl font-bold">AI Chat</h1>
+              <h1 className="text-2xl font-bold">SSD AI</h1>
             </div>
             <p
               className="text-muted-foreground animate-in fade-in slide-in-from-top-2 duration-300"
