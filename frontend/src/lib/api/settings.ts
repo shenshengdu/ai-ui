@@ -4,7 +4,7 @@ import { getHeaders } from "./headers";
 
 // Get all settings
 export const getSettings = async (): Promise<Settings> => {
-  const response = await fetch("/api/settings/", {
+  const response = await fetch("/api/settings", {
     method: "GET",
     headers: getHeaders({
       "Content-Type": "application/json",

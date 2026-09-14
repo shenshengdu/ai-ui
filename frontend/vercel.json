@@ -1,6 +1,18 @@
 {
   "rewrites": [
     {
+      "source": "/api/providers",
+      "destination": "https://api.ssd-ai.com/api/providers/"
+    },
+    {
+      "source": "/api/settings",
+      "destination": "https://api.ssd-ai.com/api/settings/"
+    },
+    {
+      "source": "/api/conversations",
+      "destination": "https://api.ssd-ai.com/api/conversations/"
+    },
+    {
       "source": "/api/:path+",
       "destination": "https://api.ssd-ai.com/api/:path+"
     }

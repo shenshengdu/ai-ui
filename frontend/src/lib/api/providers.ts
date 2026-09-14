@@ -4,7 +4,7 @@ import { getHeaders } from "./headers";
 
 // Get all providers
 export const getProviders = async (): Promise<ProviderResponse[]> => {
-  const response = await fetch("/api/providers/", {
+  const response = await fetch("/api/providers", {
     method: "GET",
     headers: getHeaders({
       "Content-Type": "application/json",
