@@ -14,6 +14,7 @@ import (
 var ErrUnauthorizedProviderReference = errors.New("unauthorized provider reference")
 
 const ProviderTypeOpenAI = "openai"
+const ProviderTypeAnthropic = "anthropic"
 
 type Provider struct {
 	ID      string                    `json:"id"`

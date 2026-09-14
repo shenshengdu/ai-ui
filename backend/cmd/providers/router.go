@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/Bajahaw/ai-ui/cmd/auth"
 	"github.com/Bajahaw/ai-ui/cmd/chatgptoauth"
@@ -98,6 +99,17 @@ func saveModels(w http.ResponseWriter, r *http.Request) {
 }
 
 func fetchAllModels(provider *Provider) ([]*Model, error) {
+	if provider.Type == ProviderTypeAnthropic {
+		return []*Model{
+			{
+				ID:         provider.ID + "/claude-opus-5",
+				Name:       "claude-opus-5",
+				ProviderID: provider.ID,
+				IsEnabled:  true,
+			},
+		}, nil
+	}
+
 	if provider.Type == chatgptoauth.ProviderType {
 		tokens, err := resolveChatGPTTokens(provider)
 		if err != nil {
@@ -125,7 +137,6 @@ func fetchAllModels(provider *Provider) ([]*Model, error) {
 	opts := []option.RequestOption{
 		option.WithAPIKey(provider.APIKey),
 		option.WithBaseURL(provider.BaseURL),
-		option.WithQuery("output_modalities", "all"),
 	}
 	for key, value := range provider.Headers {
 		opts = append(opts, option.WithHeader(key, value))
@@ -196,9 +207,14 @@ func saveProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	providerType := ProviderTypeOpenAI
+	if strings.Contains(strings.ToLower(req.BaseURL), "api.anthropic.com") {
+		providerType = ProviderTypeAnthropic
+	}
+
 	provider := &Provider{
 		ID:      utils.ExtractProviderName(req.BaseURL) + "-" + uuid.New().String()[:4],
-		Type:    ProviderTypeOpenAI,
+		Type:    providerType,
 		BaseURL: req.BaseURL,
 		APIKey:  req.APIKey,
 		User:    utils.ExtractContextUser(r),

@@ -17,6 +17,163 @@ import { formatProviderSelectLabel } from "@/lib/api/providers";
 import { Model } from "@/lib/api/types";
 import { useSettingsData } from "@/hooks/useSettingsData";
 
+type ModelTag = {
+  label: string;
+  className: string;
+};
+
+const getModelTags = (model: Model): ModelTag[] => {
+  const id = model.id.toLowerCase();
+  const name = model.name.toLowerCase();
+
+  const tags: ModelTag[] = [];
+
+  // 免费 / 收费
+  if (id === "openrouter/free" || id.endsWith(":free")) {
+    tags.push({
+      label: "免费",
+      className:
+        "border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400",
+    });
+  } else {
+    tags.push({
+      label: "收费",
+      className:
+        "border-orange-500/30 bg-orange-500/10 text-orange-600 dark:text-orange-400",
+    });
+  }
+
+  // GPT-5.6 Luna
+  if (id.includes("gpt-5.6-luna") || name.includes("gpt-5.6 luna")) {
+    tags.push(
+      {
+        label: "日常",
+        className:
+          "border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400",
+      },
+      {
+        label: "推理",
+        className:
+          "border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400",
+      },
+    );
+  }
+
+  // GPT-6 Astra
+  else if (id.includes("gpt-6-astra") || name.includes("gpt-6 astra")) {
+    tags.push(
+      {
+        label: "推理",
+        className:
+          "border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400",
+      },
+      {
+        label: "编程",
+        className:
+          "border-cyan-500/30 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400",
+      },
+      {
+        label: "多模态",
+        className:
+          "border-pink-500/30 bg-pink-500/10 text-pink-600 dark:text-pink-400",
+      },
+    );
+  }
+
+  // Claude Opus 5
+  else if (
+    id.includes("claude-opus-5") ||
+    name.includes("claude opus 5")
+  ) {
+    tags.push(
+      {
+        label: "编程",
+        className:
+          "border-cyan-500/30 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400",
+      },
+      {
+        label: "推理",
+        className:
+          "border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400",
+      },
+    );
+  }
+
+  // DeepSeek V4 Pro
+  else if (
+    id.includes("deepseek-v4-pro") ||
+    name.includes("deepseek v4 pro")
+  ) {
+    tags.push(
+      {
+        label: "推理",
+        className:
+          "border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400",
+      },
+      {
+        label: "编程",
+        className:
+          "border-cyan-500/30 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400",
+      },
+    );
+  }
+
+  // DeepSeek V4 Flash
+  else if (
+    id.includes("deepseek-v4-flash") ||
+    name.includes("deepseek v4 flash")
+  ) {
+    tags.push(
+      {
+        label: "高速",
+        className:
+          "border-yellow-500/30 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400",
+      },
+      {
+        label: "编程",
+        className:
+          "border-cyan-500/30 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400",
+      },
+      {
+        label: "推理",
+        className:
+          "border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400",
+      },
+    );
+  }
+
+  // Gemini Flash
+  else if (
+    id.includes("gemini") &&
+    (id.includes("flash") || name.includes("flash"))
+  ) {
+    tags.push(
+      {
+        label: "高速",
+        className:
+          "border-yellow-500/30 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400",
+      },
+      {
+        label: "多模态",
+        className:
+          "border-pink-500/30 bg-pink-500/10 text-pink-600 dark:text-pink-400",
+      },
+    );
+  }
+
+  // Codex / 编程模型
+  else if (id.includes("codex") || name.includes("codex")) {
+    tags.push({
+      label: "编程",
+      className:
+        "border-cyan-500/30 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400",
+    });
+  }
+
+  return tags;
+};
+
+
 /**
 
  * ModelsSection (refined styles)
@@ -279,13 +436,24 @@ export const ModelsSection: React.FC = () => {
                       />
 
                       <div className="flex-1 min-h-0 overflow-hidden">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
                           <span
                             className="truncate max-w-[200px] sm:max-w-[300px]"
                             title={model.name}
                           >
                             {model.name}
                           </span>
+
+                          <div className="flex items-center gap-1 flex-wrap flex-shrink-0">
+                            {getModelTags(model).map((tag) => (
+                              <span
+                                key={tag.label}
+                                className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap ${tag.className}`}
+                              >
+                                {tag.label}
+                              </span>
+                            ))}
+                          </div>
                         </div>
 
                         <div

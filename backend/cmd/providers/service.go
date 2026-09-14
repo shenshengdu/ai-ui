@@ -82,6 +82,10 @@ func (c *ClientImpl) SendChatCompletionRequest(params RequestParams) (*ChatCompl
 		return sendChatGPTCompletion(ctx, provider, model, params, nil)
 	}
 
+	if provider.Type == ProviderTypeAnthropic {
+		return sendAnthropicCompletion(ctx, provider, model, params)
+	}
+
 	opts := []option.RequestOption{
 		option.WithAPIKey(provider.APIKey),
 		option.WithBaseURL(provider.BaseURL),
@@ -91,14 +95,20 @@ func (c *ClientImpl) SendChatCompletionRequest(params RequestParams) (*ChatCompl
 	}
 	client := openai.NewClient(opts...)
 
+	tools := params.Tools
+	if model == "gpt-6-astra" {
+		tools = nil
+	}
+
 	openAIparams := openai.ChatCompletionNewParams{
 		Model: model,
-		Tools: params.Tools,
+		Tools: tools,
 	}
 	OpenAIMessageParams(&openAIparams, params.Messages)
 
 	log.Debug("Params ReasoningEffort:", "value", params.ReasoningEffort)
-	if params.ReasoningEffort != "" {
+	if params.ReasoningEffort != "" &&
+		!(model == "gpt-5.6-luna" && len(params.Tools) > 0) {
 		openAIparams.ReasoningEffort = params.ReasoningEffort
 	}
 
@@ -157,6 +167,9 @@ func (c *ClientImpl) SendChatCompletionStreamRequest(params RequestParams, sc ut
 		return sendChatGPTCompletion(ctx, provider, model, params, &sc)
 	}
 
+	if provider.Type == ProviderTypeAnthropic {
+		return sendAnthropicStream(ctx, provider, model, params, sc)
+	}
 	opts := []option.RequestOption{
 		option.WithAPIKey(provider.APIKey),
 		option.WithBaseURL(provider.BaseURL),
@@ -167,10 +180,20 @@ func (c *ClientImpl) SendChatCompletionStreamRequest(params RequestParams, sc ut
 	}
 	client := openai.NewClient(opts...)
 
+	reasoningEffort := params.ReasoningEffort
+	if model == "gpt-5.6-luna" && len(params.Tools) > 0 {
+		reasoningEffort = openai.ReasoningEffort("none")
+	}
+
+	tools := params.Tools
+	if model == "gpt-6-astra" {
+		tools = nil
+	}
+
 	openAIparams := openai.ChatCompletionNewParams{
 		Model:           model,
-		ReasoningEffort: params.ReasoningEffort,
-		Tools:           params.Tools,
+		ReasoningEffort: reasoningEffort,
+		Tools:           tools,
 		// Prefer real usage from providers that support the final usage chunk.
 		StreamOptions: openai.ChatCompletionStreamOptionsParam{
 			IncludeUsage: openai.Bool(true),
