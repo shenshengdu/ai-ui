@@ -22,7 +22,7 @@ export class ConversationsAPI {
   // GET /api/conversations
   async fetchConversations(): Promise<Conversation[]> {
     return ApiErrorHandler.handleApiCall(async () => {
-      const response = await fetch("/api/conversations", {
+      const response = await fetch("/api/conversations/", {
         method: "GET",
         headers: getHeaders({
           "Content-Type": "application/json",
