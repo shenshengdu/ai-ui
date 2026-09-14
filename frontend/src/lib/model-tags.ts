@@ -15,7 +15,14 @@ export const getModelTags = (model: ModelTagModel): ModelTag[] => {
   const tags: ModelTag[] = [];
 
   // 免费 / 收费
-  if (id === "openrouter/free" || id.endsWith(":free")) {
+  if (
+    id === "openrouter/free" ||
+    id.endsWith(":free") ||
+    id.includes("gemini-3.6-flush") ||
+    id.includes("z-ai/glm-4.7-flash") ||
+    id === "groq-1f06/openai/gpt-oss-120b" ||
+    id === "openrouter-ae88/openai/gpt-oss-120b"
+  ) {
     tags.push({
       label: "免费",
       className:
