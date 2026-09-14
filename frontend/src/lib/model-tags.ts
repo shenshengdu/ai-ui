@@ -19,6 +19,7 @@ export const getModelTags = (model: ModelTagModel): ModelTag[] => {
     id === "openrouter-ae88/openrouter/free" ||
     id.endsWith(":free") ||
     id === "openrouter-ae88/google/gemini-3.6-flash" ||
+    id === "googleapis-836c/models/gemini-3.6-flash" ||
     id.includes("z-ai/glm-4.7-flash") ||
     id === "groq-1f06/openai/gpt-oss-120b" ||
     id === "openrouter-ae88/openai/gpt-oss-120b"
