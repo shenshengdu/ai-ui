@@ -12,9 +12,6 @@ export class AuthAPI {
     return ApiErrorHandler.handleApiCall(async () => {
       const response = await fetch("/api/auth/status", {
         method: "GET",
-        headers: getHeaders({
-          "Content-Type": "application/json",
-        }),
         credentials: "include",
       });
 
