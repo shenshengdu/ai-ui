@@ -15,6 +15,10 @@
     {
       "source": "/api/:path+",
       "destination": "https://api.ssd-ai.com/api/:path+"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
     }
   ]
 }
