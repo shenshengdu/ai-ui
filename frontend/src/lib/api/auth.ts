@@ -3,6 +3,20 @@ import { ApiErrorHandler } from "./errorHandler.ts";
 import { AuthStatus } from "./types.ts";
 import { getHeaders } from "./headers.ts";
 
+// Cloudflare Access 会话过期时，整页刷新让 Access 接管并显示验证页。
+// 30 秒内只刷新一次，防止断网等情况下无限刷新。
+const ACCESS_RELOAD_KEY = "cf-access-reload-at";
+function reloadForAccessLogin(): void {
+  try {
+    const last = Number(sessionStorage.getItem(ACCESS_RELOAD_KEY) || 0);
+    if (Date.now() - last < 30_000) return;
+    sessionStorage.setItem(ACCESS_RELOAD_KEY, String(Date.now()));
+  } catch {
+    // sessionStorage 不可用时忽略
+  }
+  window.location.reload();
+}
+
 // Authentication API client
 export class AuthAPI {
   constructor() {}
@@ -10,10 +24,26 @@ export class AuthAPI {
   // GET /api/auth/status - Check registration and authentication status
   async getAuthStatus(): Promise<AuthStatus> {
     return ApiErrorHandler.handleApiCall(async () => {
-      const response = await fetch("/api/auth/status", {
-        method: "GET",
-        credentials: "include",
-      });
+      let response: Response;
+      try {
+        response = await fetch("/api/auth/status", {
+          method: "GET",
+          credentials: "include",
+          // 不自动跟随重定向，才能识别 Access 的登录跳转
+          redirect: "manual",
+        });
+      } catch (err) {
+        if (err instanceof TypeError && navigator.onLine) {
+          reloadForAccessLogin();
+        }
+        throw err;
+      }
+
+      // Cloudflare Access 会话过期时，这里会收到重定向
+      if (response.type === "opaqueredirect") {
+        reloadForAccessLogin();
+        throw new Error("Cloudflare Access session expired");
+      }
 
       // Status endpoint returns different status codes:
       // 200: registered and authenticated

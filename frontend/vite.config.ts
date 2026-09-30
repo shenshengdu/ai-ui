@@ -23,13 +23,32 @@ export default defineConfig({
       ],
       workbox: {
         cleanupOutdatedCaches: true,
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2,ttf}"],
-        navigateFallback: "/index.html",
-        navigateFallbackDenylist: [/^\/api\//, /^\/data\//],
+        // 不再预缓存 html，页面导航必须经过网络，Cloudflare Access 才能拦截
+        globPatterns: ["**/*.{js,css,ico,png,svg,woff,woff2,ttf}"],
+        globIgnores: ["**/*.html"],
+        // 关闭用缓存 index.html 兜底所有导航
+        navigateFallback: null,
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         runtimeCaching: [
           {
-            urlPattern: /\/api\//,
+            // 页面导航：优先走网络，断网时才用缓存
+            urlPattern: ({ request, url }) =>
+              request.mode === "navigate" &&
+              !url.pathname.startsWith("/api/") &&
+              !url.pathname.startsWith("/cdn-cgi/") &&
+              !url.pathname.startsWith("/data/"),
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "pages",
+              networkTimeoutSeconds: 5,
+              // 只缓存正常的 200 页面，不缓存 Access 的重定向
+              cacheableResponse: { statuses: [200] },
+            },
+          },
+          {
+            urlPattern: ({ url }) =>
+              url.pathname.startsWith("/api/") ||
+              url.pathname.startsWith("/cdn-cgi/"),
             handler: "NetworkOnly",
           },
         ],
