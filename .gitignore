@@ -99,3 +99,7 @@ Thumbs.DB
 *.bak
 *.log
 *.wal
+
+*.backup-*
+*.bak.*
+backend/ssd-ai-ui-backend
