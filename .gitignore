@@ -103,3 +103,8 @@ Thumbs.DB
 *.backup-*
 *.bak.*
 backend/ssd-ai-ui-backend
+
+# local backups and build output
+*.bak-*
+*.backup-*
+/backend/ssd-ai-ui-backend
