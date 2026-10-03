@@ -1,10 +1,12 @@
 package providers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
 	"strings"
@@ -17,6 +19,53 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 )
+
+// diagnosticRoundTripper temporarily captures Gemini HTTP request/response bodies.
+// Sensitive headers are intentionally not logged.
+type diagnosticRoundTripper struct {
+	base http.RoundTripper
+}
+
+func (t *diagnosticRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	base := t.base
+	if base == nil {
+		base = http.DefaultTransport
+	}
+
+	if req.Body != nil {
+		body, err := io.ReadAll(req.Body)
+		if err == nil {
+			req.Body = io.NopCloser(bytes.NewReader(body))
+
+			log.Info("Gemini HTTP request",
+				"method", req.Method,
+				"url", req.URL.String(),
+				"body", string(body),
+			)
+		}
+	}
+
+	resp, err := base.RoundTrip(req)
+	if err != nil {
+		log.Info("Gemini HTTP transport error", "err", err)
+		return nil, err
+	}
+
+	if resp.Body != nil {
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr == nil {
+			resp.Body.Close()
+			resp.Body = io.NopCloser(bytes.NewReader(body))
+
+			log.Info("Gemini HTTP response",
+				"status", resp.StatusCode,
+				"body", string(body),
+			)
+		}
+	}
+
+	return resp, nil
+}
 
 type SimpleMessage struct {
 	Role      string
@@ -50,16 +99,17 @@ type ChatCompletionMessage struct {
 }
 
 type ToolCall struct {
-	ID          string `json:"id"`
-	ReferenceID string `json:"ref_id"`
-	ConvID      string `json:"conv_id,omitempty"`
-	MessageID   int    `json:"message_id"`
-	Name        string `json:"name"`
-	Args        string `json:"args,omitempty"`
-	Output      string `json:"tool_output,omitempty"`
-	FileID      string `json:"file_id,omitempty"` // persisted file id only; never a data URL
-	TokenCount  int    `json:"tokenCount,omitempty"`
-	ContextSize int    `json:"contextSize,omitempty"`
+	ID               string `json:"id"`
+	ReferenceID      string `json:"ref_id"`
+	ThoughtSignature string `json:"thought_signature,omitempty"`
+	ConvID           string `json:"conv_id,omitempty"`
+	MessageID        int    `json:"message_id"`
+	Name             string `json:"name"`
+	Args             string `json:"args,omitempty"`
+	Output           string `json:"tool_output,omitempty"`
+	FileID           string `json:"file_id,omitempty"` // persisted file id only; never a data URL
+	TokenCount       int    `json:"tokenCount,omitempty"`
+	ContextSize      int    `json:"contextSize,omitempty"`
 }
 
 type ToolOutput struct {
@@ -105,10 +155,14 @@ func (c *ClientImpl) SendChatCompletionRequest(params RequestParams) (*ChatCompl
 		Tools: tools,
 	}
 	OpenAIMessageParams(&openAIparams, params.Messages)
+	if providerRejectsFileParts(provider.BaseURL) {
+		inlineFileParts(&openAIparams)
+		adaptDeepSeekParams(&openAIparams, provider.BaseURL)
+	}
 
 	log.Debug("Params ReasoningEffort:", "value", params.ReasoningEffort)
 	if params.ReasoningEffort != "" &&
-		!(model == "gpt-5.6-luna" && len(params.Tools) > 0) {
+		!((model == "gpt-6-luna" || model == "gpt-6.1-sol") && len(params.Tools) > 0) {
 		openAIparams.ReasoningEffort = params.ReasoningEffort
 	}
 
@@ -178,10 +232,27 @@ func (c *ClientImpl) SendChatCompletionStreamRequest(params RequestParams, sc ut
 	for key, value := range provider.Headers {
 		opts = append(opts, option.WithHeader(key, value))
 	}
+
+	if strings.Contains(provider.BaseURL, "generativelanguage.googleapis.com") {
+		opts = append(opts, option.WithHTTPClient(&http.Client{
+			Transport: &diagnosticRoundTripper{
+				base: http.DefaultTransport,
+			},
+		}))
+		log.Info("Gemini HTTP diagnostic capture enabled",
+			"provider", provider.ID,
+			"baseURL", provider.BaseURL,
+		)
+	}
+
 	client := openai.NewClient(opts...)
 
+	if useResponsesAPI(model) {
+		return sendResponsesStream(ctx, client, model, params, sc)
+	}
+
 	reasoningEffort := params.ReasoningEffort
-	if model == "gpt-5.6-luna" && len(params.Tools) > 0 {
+	if model == "gpt-6-luna" && len(params.Tools) > 0 {
 		reasoningEffort = openai.ReasoningEffort("none")
 	}
 
@@ -191,24 +262,42 @@ func (c *ClientImpl) SendChatCompletionStreamRequest(params RequestParams, sc ut
 	}
 
 	openAIparams := openai.ChatCompletionNewParams{
-		Model:           model,
-		ReasoningEffort: reasoningEffort,
-		Tools:           tools,
+		Model: model,
+		Tools: tools,
 		// Prefer real usage from providers that support the final usage chunk.
 		StreamOptions: openai.ChatCompletionStreamOptionsParam{
 			IncludeUsage: openai.Bool(true),
 		},
 	}
+
+	// GPT-6.1 Sol rejects reasoning_effort when function tools are used.
+	// Send reasoning_effort="none" explicitly in that case (unset is rejected too).
+	openAIparams.ReasoningEffort = reasoningEffort
+	log.Info("Chat completion request parameters",
+        	"model", model,
+        	"params_tools", len(params.Tools),
+        	"local_tools", len(tools),
+        	"params_reasoning_effort", string(params.ReasoningEffort),
+        	"computed_reasoning_effort", string(reasoningEffort),
+        	"openai_reasoning_effort", string(openAIparams.ReasoningEffort),
+	)
 	OpenAIMessageParams(&openAIparams, params.Messages)
+	if providerRejectsFileParts(provider.BaseURL) {
+		inlineFileParts(&openAIparams)
+		adaptDeepSeekParams(&openAIparams, provider.BaseURL)
+	}
 
 	utils.AddStreamHeaders(sc.Writer)
 
 	stream := client.Chat.Completions.NewStreaming(ctx, openAIparams)
 	acc := openai.ChatCompletionAccumulator{}
 	uniqueToolIDs := make(map[string]string)
+	thoughtSignatures := make(map[string]string)
 	// isDeepseekThinkStyle := -1
 	// isDeepseekReasoningFinished := false
-
+	contentChunkCount := 0
+	contentByteCount := 0
+	lastContentDeltas := make([]string, 0, 8)
 	start := time.Now()
 
 	for stream.Next() {
@@ -216,6 +305,31 @@ func (c *ClientImpl) SendChatCompletionStreamRequest(params RequestParams, sc ut
 		acc.AddChunk(chunk)
 
 		if len(chunk.Choices) > 0 {
+			// Capture Gemini thought_signature before the OpenAI accumulator discards it.
+			for _, deltaToolCall := range chunk.Choices[0].Delta.ToolCalls {
+				raw := deltaToolCall.RawJSON()
+				if raw == "" {
+					continue
+				}
+
+				var rawToolCall struct {
+					ID           string `json:"id"`
+					ExtraContent struct {
+						Google struct {
+							ThoughtSignature string `json:"thought_signature"`
+						} `json:"google"`
+					} `json:"extra_content"`
+				}
+
+				if err := json.Unmarshal([]byte(raw), &rawToolCall); err != nil {
+					continue
+				}
+
+				if rawToolCall.ID != "" && rawToolCall.ExtraContent.Google.ThoughtSignature != "" {
+					thoughtSignatures[rawToolCall.ID] = rawToolCall.ExtraContent.Google.ThoughtSignature
+				}
+			}
+
 			// accContent := acc.Choices[0].Message.Content
 			contentDelta := chunk.Choices[0].Delta.Content
 			reasoningDelta := chunk.Choices[0].Delta.Reasoning
@@ -239,6 +353,13 @@ func (c *ClientImpl) SendChatCompletionStreamRequest(params RequestParams, sc ut
 			}
 
 			if contentDelta != "" {
+				contentChunkCount++
+				contentByteCount += len(contentDelta)
+
+				lastContentDeltas = append(lastContentDeltas, contentDelta)
+				if len(lastContentDeltas) > 8 {
+					lastContentDeltas = lastContentDeltas[len(lastContentDeltas)-8:]
+				}
 				utils.SendStreamChunk(sc, utils.StreamChunk{
 					Payload: contentDelta,
 					Type:    utils.CONTENT,
@@ -252,10 +373,11 @@ func (c *ClientImpl) SendChatCompletionStreamRequest(params RequestParams, sc ut
 				utils.SendStreamChunk(sc, utils.StreamChunk{
 					Type: utils.TOOL_CALL,
 					Payload: ToolCall{
-						ID: uniqueToolIDs[toolCall.ID],
-						// ReferenceID: toolCall.ID,
-						Name: toolCall.Name,
-						Args: toolCall.Arguments,
+						ID:               uniqueToolIDs[toolCall.ID],
+						ReferenceID:      toolCall.ID,
+						Name:             toolCall.Name,
+						Args:             toolCall.Arguments,
+						ThoughtSignature: thoughtSignatures[toolCall.ID],
 					},
 				})
 			}
@@ -266,6 +388,12 @@ func (c *ClientImpl) SendChatCompletionStreamRequest(params RequestParams, sc ut
 	duration := time.Since(start)
 	cancelled := isContextCanceled(ctx.Err()) || isContextCanceled(stream.Err())
 
+	log.Info("Provider stream ended",
+		"duration", duration,
+		"streamErr", stream.Err(),
+		"cancelled", cancelled,
+	)
+
 	if err := stream.Err(); err != nil {
 		log.Info("Stream detailed error", "err", err)
 		if isContextCanceled(err) {
@@ -274,6 +402,12 @@ func (c *ClientImpl) SendChatCompletionStreamRequest(params RequestParams, sc ut
 		} else {
 			var apiErr *openai.Error
 			if errors.As(err, &apiErr) {
+				log.Info("Provider API error details",
+					"status", apiErr.StatusCode,
+					"code", apiErr.Code,
+					"message", apiErr.Message,
+					"raw", apiErr.RawJSON(),
+				)
 				type Error struct {
 					Message string `json:"message"`
 					Code    string `json:"code"`
@@ -320,7 +454,7 @@ func (c *ClientImpl) SendChatCompletionStreamRequest(params RequestParams, sc ut
 		return nil, fmt.Errorf("no choices in completion")
 	}
 
-	log.Debug("Stop reason:", "reason", acc.Choices[0].FinishReason)
+	log.Info("Stop reason:", "reason", acc.Choices[0].FinishReason)
 
 	// Compatibility across providers: some use reasoning_text or reasoning_content.
 	reasoning := acc.Choices[0].Message.Reasoning
@@ -332,7 +466,12 @@ func (c *ClientImpl) SendChatCompletionStreamRequest(params RequestParams, sc ut
 	}
 
 	content := acc.Choices[0].Message.Content
-
+	log.Info("Content stream diagnostics",
+		"chunks", contentChunkCount,
+		"deltaBytes", contentByteCount,
+		"accContentBytes", len(content),
+		"lastDeltas", lastContentDeltas,
+	)
 	// On cancel, never hand partial/incomplete tool calls to the agent loop.
 	// JustFinishedToolCall may never have fired for truncated argument streams.
 	var toolCalls []ToolCall
@@ -346,10 +485,11 @@ func (c *ClientImpl) SendChatCompletionStreamRequest(params RequestParams, sc ut
 				id = uuid.New().String()
 			}
 			toolCalls = append(toolCalls, ToolCall{
-				ID:          id,
-				ReferenceID: tc.ID,
-				Name:        tc.Function.Name,
-				Args:        tc.Function.Arguments,
+				ID:               id,
+				ReferenceID:      tc.ID,
+				Name:             tc.Function.Name,
+				Args:             tc.Function.Arguments,
+				ThoughtSignature: thoughtSignatures[tc.ID],
 			})
 		}
 	} else {

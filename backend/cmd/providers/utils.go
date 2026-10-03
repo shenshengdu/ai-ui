@@ -38,7 +38,7 @@ func OpenAIMessageParams(params *openai.ChatCompletionNewParams, messages []Simp
 							},
 						})
 			}
-			for _, fileData := range msg.Files {
+			for _, fileData := range sanitizedFiles(msg.Files) {
 				userMsg.OfUser.Content.OfArrayOfContentParts =
 					append(userMsg.OfUser.Content.OfArrayOfContentParts,
 						openai.ChatCompletionContentPartUnionParam{
@@ -66,6 +66,16 @@ func OpenAIMessageParams(params *openai.ChatCompletionNewParams, messages []Simp
 						},
 					},
 				)
+				if msg.ToolCall.ThoughtSignature != "" && !isResponsesReasoningBlob(msg.ToolCall.ThoughtSignature) {
+					assistantMsg.OfAssistant.ToolCalls[len(assistantMsg.OfAssistant.ToolCalls)-1].OfFunction.SetExtraFields(map[string]any{
+						"extra_content": map[string]any{
+							"google": map[string]any{
+								"thought_signature": msg.ToolCall.ThoughtSignature,
+							},
+						},
+					})
+				}
+
 			}
 			// Only set during live agent loop (SimpleMessage.Reasoning is empty otherwise).
 			if msg.Reasoning != "" {
@@ -73,9 +83,9 @@ func OpenAIMessageParams(params *openai.ChatCompletionNewParams, messages []Simp
 					"reasoning_content": msg.Reasoning,
 				})
 				params.SetExtraFields(map[string]any{
-					"reasoning_history": "preserved",                           
-					"thinking":          map[string]any{"keep": "all"},         
-					// "reasoning":         map[string]any{"context": "all_turns"}, // breaks some providers 
+					"reasoning_history": "preserved",
+					"thinking":          map[string]any{"keep": "all"},
+					// "reasoning":         map[string]any{"context": "all_turns"}, // breaks some providers
 				})
 			}
 			openaiMessages = append(openaiMessages, assistantMsg)
@@ -116,7 +126,7 @@ func OpenAIMessageParams(params *openai.ChatCompletionNewParams, messages []Simp
 						},
 					})
 				}
-				for _, fileData := range msg.Files {
+				for _, fileData := range sanitizedFiles(msg.Files) {
 					parts = append(parts, openai.ChatCompletionContentPartUnionParam{
 						OfFile: &openai.ChatCompletionContentPartFileParam{
 							File: openai.ChatCompletionContentPartFileFileParam{
