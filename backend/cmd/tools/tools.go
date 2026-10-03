@@ -135,6 +135,8 @@ func ExecuteMCPTool(ctx context.Context, toolCall providers.ToolCall, user, conv
 			return httpRequestTool(toolCall.Args, user)
 		case "browser_sandbox":
 			return browserSandboxTool(ctx, toolCall.ID, toolCall.Args, user)
+		case "web_search":
+			return webSearchTool(toolCall.Args)
 		}
 	}
 
@@ -231,6 +233,13 @@ func GetBuiltInTools() []*Tool {
 			InputSchema:     `{"type":"object","properties":{"url":{"type":"string","description":"https URL (DNS hostname). $secrets.NAME$ in path/query."},"method":{"type":"string","description":"GET, HEAD, POST, PUT, PATCH, or DELETE","default":"GET"},"headers":{"type":"object","additionalProperties":{"type":"string"},"description":"Optional headers. $secrets.NAME$ allowed."},"body":{"description":"Optional body for POST/PUT/PATCH/DELETE. Prefer JSON object/array."},"verbose":{"type":"boolean","description":"Raw/larger response body.","default":false},"json_pointers":{"type":"array","items":{"type":"string"},"description":"RFC 6901 pointers into JSON body (e.g. \"/data/0/id\"). Missing paths → null. Exclusive with css_selectors."},"css_selectors":{"type":"array","items":{"type":"string"},"description":"CSS selectors into HTML (e.g. \"a.result\"). Exclusive with json_pointers."}},"required":["url"]}`,
 			RequireApproval: true,
 			IsEnabled:       true,
+		},
+		{
+			ID:          uuid.New().String(),
+			Name:        "web_search",
+			Description: "Search the web using the platform's built-in search engine. Use this for current information, news, websites, public facts, and research. Returns concise search results with title, URL, and snippet.",
+			InputSchema: `{"type":"object","properties":{"query":{"type":"string","description":"The web search query"}},"required":["query"]}`,
+			IsEnabled:   true,
 		},
 	}
 }

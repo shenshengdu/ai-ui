@@ -272,6 +272,10 @@ func enterAgentLoop(
 	executed := make([]executedTool, len(calls))
 	var wg sync.WaitGroup
 	for i, toolCall := range calls {
+		log.Info("Agent loop tool call",
+			"name", toolCall.Name,
+			"args", toolCall.Args,
+		)
 		toolCall.MessageID = responseMessage.ID
 		toolCall.ConvID = convID
 		executed[i].call = toolCall
