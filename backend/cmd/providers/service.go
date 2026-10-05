@@ -143,6 +143,7 @@ func (c *ClientImpl) SendChatCompletionRequest(params RequestParams) (*ChatCompl
 	for key, value := range provider.Headers {
 		opts = append(opts, option.WithHeader(key, value))
 	}
+	opts = append(opts, geminiOptions(provider.BaseURL)...)
 	client := openai.NewClient(opts...)
 
 	tools := params.Tools
@@ -233,7 +234,7 @@ func (c *ClientImpl) SendChatCompletionStreamRequest(params RequestParams, sc ut
 		opts = append(opts, option.WithHeader(key, value))
 	}
 
-	if strings.Contains(provider.BaseURL, "generativelanguage.googleapis.com") {
+	if strings.Contains(provider.BaseURL, "generativelanguage.googleapis.com") && geminiHTTPDebug() {
 		opts = append(opts, option.WithHTTPClient(&http.Client{
 			Transport: &diagnosticRoundTripper{
 				base: http.DefaultTransport,
@@ -245,6 +246,7 @@ func (c *ClientImpl) SendChatCompletionStreamRequest(params RequestParams, sc ut
 		)
 	}
 
+	opts = append(opts, geminiOptions(provider.BaseURL)...)
 	client := openai.NewClient(opts...)
 
 	if useResponsesAPI(model) {
@@ -252,6 +254,7 @@ func (c *ClientImpl) SendChatCompletionStreamRequest(params RequestParams, sc ut
 	}
 
 	reasoningEffort := params.ReasoningEffort
+	reasoningEffort = adjustGeminiEffort(provider.BaseURL, model, reasoningEffort)
 	if model == "gpt-6-luna" && len(params.Tools) > 0 {
 		reasoningEffort = openai.ReasoningEffort("none")
 	}
