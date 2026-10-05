@@ -202,7 +202,7 @@ func (c *ClientImpl) SendChatCompletionRequest(params RequestParams) (*ChatCompl
 }
 
 // SendChatCompletionStreamRequest streams chat completions and returns the full content
-func (c *ClientImpl) SendChatCompletionStreamRequest(params RequestParams, sc utils.StreamClient) (*ChatCompletionMessage, error) {
+func (c *ClientImpl) sendChatCompletionStreamOnce(params RequestParams, sc utils.StreamClient) (*ChatCompletionMessage, error) {
 	providerID, model := utils.ExtractProviderID(params.Model)
 	provider, err := providers.GetByID(providerID, params.User)
 	if err != nil {
