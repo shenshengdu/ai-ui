@@ -131,6 +131,8 @@ func ExecuteMCPTool(ctx context.Context, toolCall providers.ToolCall, user, conv
 			return viewDocumentPageTool(toolCall.Args, user, convID)
 		case "generate_image":
 			return generateImageTool(toolCall.Args, user, convID)
+		case "finance_stock", "finance_technical", "finance_valuation", "finance_market":
+			return financeTool(ctx, tool.Name, toolCall.Args)
 		case "http_request":
 			return httpRequestTool(toolCall.Args, user)
 		case "browser_sandbox":
@@ -181,6 +183,10 @@ func GetAvailableTools(user string) []*Tool {
 // MCPServerID is left empty; callers must set it to the owning server ID
 // (e.g. "default-{user}") before persisting, so the Tools FK is satisfied.
 func GetBuiltInTools() []*Tool {
+	return append(baseBuiltInTools(), financeBuiltInTools()...)
+}
+
+func baseBuiltInTools() []*Tool {
 	return []*Tool{
 		{
 			ID:          uuid.New().String(),
