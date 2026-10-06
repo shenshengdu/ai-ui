@@ -292,6 +292,11 @@ func (c *ClientImpl) sendChatCompletionStreamOnce(params RequestParams, sc utils
 
 	utils.AddStreamHeaders(sc.Writer)
 
+	var idle *idleWatchdog
+	if isGatewayBaseURL(provider.BaseURL) {
+		ctx, idle = newIdleWatchdog(ctx, streamIdleTimeout())
+		defer idle.Stop()
+	}
 	stream := client.Chat.Completions.NewStreaming(ctx, openAIparams)
 	acc := openai.ChatCompletionAccumulator{}
 	uniqueToolIDs := make(map[string]string)
@@ -304,6 +309,7 @@ func (c *ClientImpl) sendChatCompletionStreamOnce(params RequestParams, sc utils
 	start := time.Now()
 
 	for stream.Next() {
+		idle.Touch()
 		chunk := stream.Current()
 		acc.AddChunk(chunk)
 
@@ -388,6 +394,10 @@ func (c *ClientImpl) sendChatCompletionStreamOnce(params RequestParams, sc utils
 		}
 	}
 
+	if idle.Fired() {
+		log.Info("Gateway stream idle timeout", "model", model, "idle", streamIdleTimeout())
+		return nil, fmt.Errorf("503 stream idle timeout: no data from gateway for %s", streamIdleTimeout())
+	}
 	duration := time.Since(start)
 	cancelled := isContextCanceled(ctx.Err()) || isContextCanceled(stream.Err())
 

@@ -67,7 +67,7 @@ var effortRank = map[openai.ReasoningEffort]int{
 // An unset effort (UI "Disabled") is also replaced by the cap, because Gemini
 // otherwise thinks dynamically, which is slow and burns free-tier quota.
 func adjustGeminiEffort(baseURL, model string, e openai.ReasoningEffort) openai.ReasoningEffort {
-	if !isGeminiProvider(baseURL, model) {
+	if !isGeminiProvider(baseURL, model) && !isGatewayBaseURL(baseURL) {
 		return e
 	}
 	target := strings.ToLower(strings.TrimSpace(os.Getenv("GEMINI_REASONING_EFFORT")))
