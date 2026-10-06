@@ -350,6 +350,7 @@ func enterAgentLoop(
 		})
 	}
 
+	providerParams = applyToolBudget(providerParams)
 	completion, err := provider.SendChatCompletionStreamRequest(providerParams, sc)
 	if err != nil {
 		log.Error("Error streaming chat completion after tool call", "err", err)
@@ -383,6 +384,10 @@ func enterAgentLoop(
 	}
 
 	calls = completion.ToolCalls
+	if len(calls) > 0 && toolBudgetExhausted(providerParams, sc) {
+		completion.ToolCalls = nil
+		return completion, nil
+	}
 	if len(calls) > 0 {
 		return enterAgentLoop(calls, providerParams, responseMessage, convID, user, sc)
 	}
