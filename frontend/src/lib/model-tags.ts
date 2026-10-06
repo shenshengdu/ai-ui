@@ -76,7 +76,7 @@ export const getModelTags = (model: ModelTagModel): ModelTag[] => {
 
   // Claude Opus 5
   else if (
-    id.includes("claude-opus-5") ||
+    id.includes("claude-sonnet-5-5") ||
     name.includes("claude opus 5")
   ) {
     tags.push(

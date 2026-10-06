@@ -102,8 +102,8 @@ func fetchAllModels(provider *Provider) ([]*Model, error) {
 	if provider.Type == ProviderTypeAnthropic {
 		return []*Model{
 			{
-				ID:         provider.ID + "/claude-opus-5",
-				Name:       "claude-opus-5",
+				ID:         provider.ID + "/claude-sonnet-5-5",
+				Name:       "claude-sonnet-5-5",
 				ProviderID: provider.ID,
 				IsEnabled:  true,
 			},
