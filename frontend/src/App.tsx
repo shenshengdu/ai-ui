@@ -9,7 +9,7 @@ import { SettingsDialog } from "@/components/settings";
 import { Attachment } from "@/lib/api/types";
 import { NavigateFunction, useNavigate, useParams } from "react-router-dom";
 
-import { MessageSquareIcon, SettingsIcon } from "lucide-react";
+import { ActivityIcon, MessageSquareIcon, SettingsIcon } from "lucide-react";
 
 function historyIdx(): number {
   return typeof window.history.state?.idx === "number"
@@ -345,6 +345,19 @@ function App() {
             </Button>
           </div>
           <div className="flex items-center gap-2 lg:pointer-events-auto">
+            {isAuthenticated && (
+              <Button
+                asChild
+                variant="ghost"
+                size="sm"
+                className="hover:bg-accent"
+                title="网关模型状态"
+              >
+                <a href="/api/gateway-health/" target="_blank" rel="noopener">
+                  <ActivityIcon className="size-4" />
+                </a>
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"
