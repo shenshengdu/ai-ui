@@ -13,6 +13,14 @@
       "destination": "https://api.ssd-ai.com/api/conversations/"
     },
     {
+      "source": "/api/gateway-health",
+      "destination": "https://api.ssd-ai.com/api/gateway-health/"
+    },
+    {
+      "source": "/api/gateway-health/",
+      "destination": "https://api.ssd-ai.com/api/gateway-health/"
+    },
+    {
       "source": "/api/:path+",
       "destination": "https://api.ssd-ai.com/api/:path+"
     },
