@@ -17,6 +17,7 @@ import (
 	"github.com/Bajahaw/ai-ui/cmd/chat"
 	"github.com/Bajahaw/ai-ui/cmd/data"
 	"github.com/Bajahaw/ai-ui/cmd/files"
+	"github.com/Bajahaw/ai-ui/cmd/gatewayhealth"
 	"github.com/Bajahaw/ai-ui/cmd/providers"
 	"github.com/Bajahaw/ai-ui/cmd/secrets"
 	"github.com/Bajahaw/ai-ui/cmd/settings"
@@ -192,6 +193,7 @@ func startServer() {
 	mux.Handle("/api/settings/", settings.SettingsHandler())
 	mux.Handle("/api/tools/", tools.Handler())
 	mux.Handle("/api/skills/", skills.Handler())
+	mux.Handle("/api/gateway-health/", gatewayhealth.Handler())
 	mux.Handle("/api/secrets/", secrets.Handler())
 	mux.Handle("/api/auth/", auth.Handler())
 	mux.HandleFunc("/api/version", version.HandleGetVersion)
