@@ -1,9 +1,11 @@
 package providers
 
 import (
+	"os"
 	"strings"
 	"testing"
 
+	logger "github.com/charmbracelet/log"
 	"github.com/openai/openai-go/v3"
 )
 
@@ -152,6 +154,7 @@ func TestToChatGPTMessages_ToolImagesBecomeUserFollowUp(t *testing.T) {
 }
 
 func TestOpenAIMessageParams_ToolFollowUpUsesRequestMetadata(t *testing.T) {
+	log = logger.New(os.Stderr)
 	params := &openai.ChatCompletionNewParams{}
 	OpenAIMessageParams(params, []SimpleMessage{
 		{

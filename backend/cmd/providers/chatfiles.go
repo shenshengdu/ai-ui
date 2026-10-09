@@ -148,3 +148,42 @@ func ensureDeepSeekReasoningContent(p *openai.ChatCompletionNewParams) {
 		a.SetExtraFields(merged)
 	}
 }
+
+// adaptGroqParams removes reasoning metadata that Groq's
+// OpenAI-compatible Chat Completions API does not accept.
+// Keep this provider-specific: DeepSeek still needs reasoning_content.
+func adaptGroqParams(p *openai.ChatCompletionNewParams, baseURL string) {
+	if !strings.Contains(strings.ToLower(baseURL), "api.groq.com") {
+		return
+	}
+
+	for i := range p.Messages {
+		a := p.Messages[i].OfAssistant
+		if a == nil {
+			continue
+		}
+
+		extra := a.ExtraFields()
+		if _, exists := extra["reasoning_content"]; !exists {
+			continue
+		}
+
+		cleaned := make(map[string]any, len(extra))
+		for k, v := range extra {
+			if k != "reasoning_content" {
+				cleaned[k] = v
+			}
+		}
+		a.SetExtraFields(cleaned)
+	}
+
+	// These are internal reasoning hints, not standard Groq request fields.
+	cleanedParams := make(map[string]any)
+	for k, v := range p.ExtraFields() {
+		if k == "reasoning_history" || k == "thinking" {
+			continue
+		}
+		cleanedParams[k] = v
+	}
+	p.SetExtraFields(cleanedParams)
+}

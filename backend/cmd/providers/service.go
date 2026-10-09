@@ -156,6 +156,7 @@ func (c *ClientImpl) SendChatCompletionRequest(params RequestParams) (*ChatCompl
 		Tools: tools,
 	}
 	OpenAIMessageParams(&openAIparams, params.Messages)
+	adaptGroqParams(&openAIparams, provider.BaseURL)
 	if providerRejectsFileParts(provider.BaseURL) {
 		inlineFileParts(&openAIparams)
 		adaptDeepSeekParams(&openAIparams, provider.BaseURL)
@@ -277,14 +278,15 @@ func (c *ClientImpl) sendChatCompletionStreamOnce(params RequestParams, sc utils
 	// Send reasoning_effort="none" explicitly in that case (unset is rejected too).
 	openAIparams.ReasoningEffort = reasoningEffort
 	log.Info("Chat completion request parameters",
-        	"model", model,
-        	"params_tools", len(params.Tools),
-        	"local_tools", len(tools),
-        	"params_reasoning_effort", string(params.ReasoningEffort),
-        	"computed_reasoning_effort", string(reasoningEffort),
-        	"openai_reasoning_effort", string(openAIparams.ReasoningEffort),
+		"model", model,
+		"params_tools", len(params.Tools),
+		"local_tools", len(tools),
+		"params_reasoning_effort", string(params.ReasoningEffort),
+		"computed_reasoning_effort", string(reasoningEffort),
+		"openai_reasoning_effort", string(openAIparams.ReasoningEffort),
 	)
 	OpenAIMessageParams(&openAIparams, params.Messages)
+	adaptGroqParams(&openAIparams, provider.BaseURL)
 	if providerRejectsFileParts(provider.BaseURL) {
 		inlineFileParts(&openAIparams)
 		adaptDeepSeekParams(&openAIparams, provider.BaseURL)
