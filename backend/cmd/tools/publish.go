@@ -22,10 +22,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -88,7 +90,7 @@ type reportArgs struct {
 var (
 	reportTickerRe = regexp.MustCompile(`^[A-Z0-9.\-]{1,15}$`)
 	reportDateRe   = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
-	reportNumRe    = regexp.MustCompile(`\d+(?:\.\d+)?`)
+	reportNumRe    = regexp.MustCompile(`\d[\d,]*(?:\.\d+)?`)
 	reportTypes    = map[string]bool{"comprehensive": true, "valuation": true, "technical": true, "market": true, "news": true}
 	reportTiers    = map[string]bool{"": true, "positive": true, "mod_positive": true, "neutral": true, "mod_cautious": true, "cautious": true}
 	reportHTTP     = &http.Client{Timeout: 4 * time.Minute}
@@ -136,28 +138,32 @@ func publishReportTool(ctx context.Context, args string) providers.ToolOutput {
 
 	var warnings []string
 	langs := map[string]*reportLang{"zh": a.Zh}
-	for _, l := range []string{"en", "ja"} {
-		var tr *reportLang
-		if l == "en" {
-			tr = a.En
-		} else {
-			tr = a.Ja
-		}
-		if tr == nil || strings.TrimSpace(tr.Body) == "" {
-			t, err := translateReport(ctx, a.Zh, l)
-			if err != nil {
-				warnings = append(warnings, fmt.Sprintf("%s 版未发布：%v", l, err))
-				continue
-			}
-			tr = t
-		}
-		tr.Body = cleanReportBody(tr.Body)
-		if strings.TrimSpace(tr.Title) == "" {
-			tr.Title = a.Zh.Title
-		}
-		warnings = append(warnings, checkTranslation(l, a.Zh.Body, tr.Body)...)
-		langs[l] = tr
+	type result struct {
+		lang     string
+		tr       *reportLang
+		warnings []string
 	}
+	results := make(chan result, 2)
+	for _, l := range []string{"en", "ja"} {
+		var given *reportLang
+		if l == "en" {
+			given = a.En
+		} else {
+			given = a.Ja
+		}
+		go func(l string, given *reportLang) {
+			tr, w := prepareTranslation(ctx, a.Zh, l, given)
+			results <- result{l, tr, w}
+		}(l, given)
+	}
+	for i := 0; i < 2; i++ {
+		r := <-results
+		warnings = append(warnings, r.warnings...)
+		if r.tr != nil {
+			langs[r.lang] = r.tr
+		}
+	}
+	sort.Strings(warnings)
 
 	slug := strings.ToLower(strings.ReplaceAll(a.Ticker, ".", "-")) + "-" + a.DataDate
 	now := time.Now().In(tokyo())
@@ -192,6 +198,86 @@ func publishReportTool(ctx context.Context, args string) providers.ToolOutput {
 		}
 	}
 	return providers.ToolOutput{Content: b.String()}
+}
+
+// prepareTranslation returns a checked translation, or nil (with the reason)
+// when the language must not be published. A translation whose 亿 amounts do
+// not convert correctly is retried once with the problems listed, then dropped.
+func prepareTranslation(ctx context.Context, zh *reportLang, lang string, given *reportLang) (*reportLang, []string) {
+	var w []string
+	tr := given
+	feedback := ""
+	for attempt := 0; attempt < 2; attempt++ {
+		if tr == nil || strings.TrimSpace(tr.Body) == "" {
+			t, err := translateReport(ctx, zh, lang, feedback)
+			if err != nil {
+				return nil, []string{fmt.Sprintf("%s 版未发布：%v", lang, err)}
+			}
+			tr = t
+		}
+		tr.Body = cleanReportBody(tr.Body)
+		if strings.TrimSpace(tr.Title) == "" {
+			tr.Title = zh.Title
+		}
+		problems := checkUnits(lang, zh.Body+"\n"+zh.Summary, tr.Body+"\n"+tr.Summary)
+		if len(problems) == 0 {
+			return tr, append(w, checkTranslation(lang, zh.Body, tr.Body)...)
+		}
+		feedback = "Your previous translation converted these amounts incorrectly. Fix them:\n- " + strings.Join(problems, "\n- ")
+		tr = nil // retranslate
+		if attempt == 1 {
+			list := problems
+			if len(list) > 6 {
+				list = append(list[:6], "…")
+			}
+			return nil, []string{fmt.Sprintf("%s 版未发布：金额单位换算两次都不正确（%s）", lang, strings.Join(list, "；"))}
+		}
+	}
+	return nil, nil
+}
+
+var reportYiRe = regexp.MustCompile(`(\d[\d,]*(?:\.\d+)?)\s*亿`)
+
+func fmtNum(v float64) string {
+	return strconv.FormatFloat(math.Round(v*1e6)/1e6, 'f', -1, 64)
+}
+
+// containsAmount reports whether text has num as a standalone number directly
+// followed by unit (e.g. "302.969 billion"); commas must already be removed.
+func containsAmount(text, num, unit string) bool {
+	re := regexp.MustCompile(`(?i)(^|[^\d.])` + regexp.QuoteMeta(num) + `\s*` + unit)
+	return re.MatchString(text)
+}
+
+// checkUnits verifies every "X亿" amount in the Chinese text: English must show
+// X/10 billion, X*100 million or X hundred million; Japanese must keep X億.
+func checkUnits(lang, zh, tr string) []string {
+	plain := strings.ReplaceAll(tr, ",", "")
+	seen := map[string]bool{}
+	var bad []string
+	for _, m := range reportYiRe.FindAllStringSubmatch(zh, -1) {
+		raw := strings.ReplaceAll(m[1], ",", "")
+		if seen[raw] {
+			continue
+		}
+		seen[raw] = true
+		v, err := strconv.ParseFloat(raw, 64)
+		if err != nil {
+			continue
+		}
+		switch lang {
+		case "ja":
+			if !strings.Contains(plain, raw+"億") {
+				bad = append(bad, fmt.Sprintf("%s亿 应写作 %s億", m[1], m[1]))
+			}
+		default:
+			b, mi := fmtNum(v/10), fmtNum(v*100)
+			if !containsAmount(plain, b, "(billion|bn)") && !containsAmount(plain, mi, "(million|mn)") && !containsAmount(plain, raw, "hundred[ -]million") {
+				bad = append(bad, fmt.Sprintf("%s亿 = %s billion (= %s million)", m[1], b, mi))
+			}
+		}
+	}
+	return bad
 }
 
 func envOr(k, def string) string {
@@ -231,11 +317,22 @@ func cleanReportBody(body string) string {
 				strings.HasPrefix(t, "数据日期") || strings.HasPrefix(t, "分析类型") ||
 				strings.HasPrefix(t, "Data as of") || strings.HasPrefix(t, "Analysis type") ||
 				strings.HasPrefix(t, "データ基準日") || strings.HasPrefix(t, "分析タイプ") ||
-				strings.HasPrefix(t, "（之后直接进入") {
+				strings.HasPrefix(t, "（之后直接进入") ||
+				strings.HasPrefix(t, "**数据日期") || strings.HasPrefix(t, "**分析类型") ||
+				strings.HasPrefix(t, "决策引用") || strings.HasPrefix(t, "**决策引用") {
 				continue
 			}
 		}
 		out = append(out, ln)
+	}
+	// drop the closing disclaimer line(s); the page adds its own
+	for len(out) > 0 {
+		t := strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(out[len(out)-1]), ">"))
+		if t == "" || strings.HasPrefix(t, "本报告基于") || strings.HasPrefix(t, "This report is based on") || strings.HasPrefix(t, "本レポートは") {
+			out = out[:len(out)-1]
+			continue
+		}
+		break
 	}
 	return strings.TrimSpace(strings.Join(out, "\n")) + "\n"
 }
@@ -308,10 +405,13 @@ func checkTranslation(lang, zh, tr string) []string {
 	}
 	have := map[string]bool{}
 	for _, n := range reportNumRe.FindAllString(tr, -1) {
-		have[n] = true
+		have[strings.TrimRight(strings.ReplaceAll(n, ",", ""), ".")] = true
 	}
+	// 亿 amounts are checked separately by checkUnits (their numbers change in English)
+	zhNoYi := reportYiRe.ReplaceAllString(zh, "")
 	missing := map[string]bool{}
-	for _, n := range reportNumRe.FindAllString(zh, -1) {
+	for _, n := range reportNumRe.FindAllString(zhNoYi, -1) {
+		n = strings.TrimRight(strings.ReplaceAll(n, ",", ""), ".")
 		if !have[n] {
 			missing[n] = true
 		}
@@ -325,16 +425,20 @@ func checkTranslation(lang, zh, tr string) []string {
 		if len(list) > 12 {
 			list = append(list[:12], "…")
 		}
-		w = append(w, fmt.Sprintf("%s 版缺少中文里的这些数字（可能是单位换算，如“亿”→billion，请核对）：%s", lang, strings.Join(list, ", ")))
+		w = append(w, fmt.Sprintf("%s 版缺少中文里的这些数字（请核对是否漏译或改动）：%s", lang, strings.Join(list, ", ")))
 	}
 	return w
 }
+
+const enUnitRule = "Chinese 亿 = 100 million. Convert every 亿 amount exactly: X亿美元 = US$(X/10) billion. Examples: 3,029.69亿美元 = US$302.969 billion; 1,080亿美元 = US$108 billion; 890亿美元 = US$89 billion; 9.68亿美元 = US$968 million. Never write X亿 as X billion. A table whose header says 亿美元 may keep its numbers if the header says USD 100 million."
+
+const jaUnitRule = "Japanese 億 equals Chinese 亿: keep every amount number unchanged, e.g. 3,029.69亿美元 = 3,029.69億ドル, 1,080亿 = 1,080億. Never convert to 兆 or 10億 units."
 
 const translateSystem = `You translate Chinese US-equity research reports for a public website.
 Rules:
 - Translate faithfully. Do not add, remove, summarize or soften anything.
 - Keep every number, date, ticker, percentage and table cell value exactly as in the source. Keep Markdown structure, table layout and heading levels unchanged.
-- Do not convert Chinese numeric units into different numbers unless required; if you write 亿 as a western unit, compute it exactly.
+- %s
 - Fixed terms (tier names): 积极=%s, 偏积极=%s, 中性=%s, 偏谨慎=%s, 谨慎=%s; 决策参考=%s; 综合研究=%s.
 - Section headings: translate "一、核心结论" style headings as numbered headings in the target language, keeping the numbering (1., 2., … 10.1 …).
 - Model field names and states (e.g. bullish, fair_value, finance_technical.divergence) stay in English as written.
@@ -346,7 +450,7 @@ Output exactly this format and nothing else:
 <<<BODY>>>
 (translated Markdown body)`
 
-func translateReport(ctx context.Context, src *reportLang, lang string) (*reportLang, error) {
+func translateReport(ctx context.Context, src *reportLang, lang, feedback string) (*reportLang, error) {
 	base := strings.TrimRight(strings.TrimSpace(os.Getenv("REPORT_TRANSLATE_BASE_URL")), "/")
 	key := strings.TrimSpace(os.Getenv("REPORT_TRANSLATE_API_KEY"))
 	model := strings.TrimSpace(os.Getenv("REPORT_TRANSLATE_MODEL"))
@@ -356,19 +460,26 @@ func translateReport(ctx context.Context, src *reportLang, lang string) (*report
 	var sys, target string
 	if lang == "en" {
 		target = "English"
-		sys = fmt.Sprintf(translateSystem, "Positive", "Moderately Positive", "Neutral", "Moderately Cautious", "Cautious", "Decision reference", "Comprehensive research")
+		sys = fmt.Sprintf(translateSystem, enUnitRule, "Positive", "Moderately Positive", "Neutral", "Moderately Cautious", "Cautious", "Decision reference", "Comprehensive research")
 	} else {
 		target = "Japanese"
-		sys = fmt.Sprintf(translateSystem, "積極", "やや積極", "中立", "やや慎重", "慎重", "判断参考", "総合リサーチ")
+		sys = fmt.Sprintf(translateSystem, jaUnitRule, "積極", "やや積極", "中立", "やや慎重", "慎重", "判断参考", "総合リサーチ")
 	}
 	user := fmt.Sprintf("Target language: %s\n\n<<<TITLE>>>\n%s\n<<<SUMMARY>>>\n%s\n<<<BODY>>>\n%s", target, src.Title, src.Summary, src.Body)
-	reqBody, _ := json.Marshal(map[string]any{
+	if feedback != "" {
+		user += "\n\n" + feedback
+	}
+	body := map[string]any{
 		"model": model,
 		"messages": []map[string]string{
 			{"role": "system", "content": sys},
 			{"role": "user", "content": user},
 		},
-	})
+	}
+	if e := strings.TrimSpace(os.Getenv("REPORT_TRANSLATE_EFFORT")); e != "" {
+		body["reasoning_effort"] = e
+	}
+	reqBody, _ := json.Marshal(body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/chat/completions", bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, err

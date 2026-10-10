@@ -157,6 +157,7 @@ func (c *ClientImpl) SendChatCompletionRequest(params RequestParams) (*ChatCompl
 	}
 	OpenAIMessageParams(&openAIparams, params.Messages)
 	adaptGroqParams(&openAIparams, provider.BaseURL)
+	capToolCallIDs(&openAIparams, provider.BaseURL, model)
 	if providerRejectsFileParts(provider.BaseURL) {
 		inlineFileParts(&openAIparams)
 		adaptDeepSeekParams(&openAIparams, provider.BaseURL)
@@ -287,6 +288,7 @@ func (c *ClientImpl) sendChatCompletionStreamOnce(params RequestParams, sc utils
 	)
 	OpenAIMessageParams(&openAIparams, params.Messages)
 	adaptGroqParams(&openAIparams, provider.BaseURL)
+	capToolCallIDs(&openAIparams, provider.BaseURL, model)
 	if providerRejectsFileParts(provider.BaseURL) {
 		inlineFileParts(&openAIparams)
 		adaptDeepSeekParams(&openAIparams, provider.BaseURL)

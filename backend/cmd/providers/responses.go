@@ -193,9 +193,9 @@ func toResponsesInput(model string, messages []SimpleMessage) responses.Response
 
 func responsesCallID(tc ToolCall) string {
 	if tc.ReferenceID != "" {
-		return tc.ReferenceID
+		return capToolCallID(tc.ReferenceID)
 	}
-	return tc.ID
+	return capToolCallID(tc.ID)
 }
 
 func formatResponsesError(err error) error {
