@@ -133,6 +133,8 @@ func ExecuteMCPTool(ctx context.Context, toolCall providers.ToolCall, user, conv
 			return generateImageTool(toolCall.Args, user, convID)
 		case "finance_stock", "finance_technical", "finance_valuation", "finance_market", "finance_market_news", "finance_decision", "finance_quote", "finance_global_market":
 			return financeTool(ctx, tool.Name, toolCall.Args)
+		case "publish_report":
+			return publishReportTool(ctx, toolCall.Args)
 		case "http_request":
 			return httpRequestTool(toolCall.Args, user)
 		case "browser_sandbox":
@@ -183,7 +185,7 @@ func GetAvailableTools(user string) []*Tool {
 // MCPServerID is left empty; callers must set it to the owning server ID
 // (e.g. "default-{user}") before persisting, so the Tools FK is satisfied.
 func GetBuiltInTools() []*Tool {
-	return append(baseBuiltInTools(), financeBuiltInTools()...)
+	return append(append(baseBuiltInTools(), financeBuiltInTools()...), publishBuiltInTools()...)
 }
 
 func baseBuiltInTools() []*Tool {
