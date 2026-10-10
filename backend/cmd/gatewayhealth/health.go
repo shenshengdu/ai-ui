@@ -16,6 +16,7 @@ import (
 	"html/template"
 	"net/http"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"time"
@@ -49,6 +50,7 @@ type ModelRow struct {
 	LastError string    `json:"last_error,omitempty"`
 	Days      []DayCell `json:"days"`
 	BlockedTo string    `json:"blocked_until,omitempty"`
+	Removed   bool      `json:"removed,omitempty"`
 }
 
 type Summary struct {
@@ -74,6 +76,22 @@ func env(k, def string) string {
 		return v
 	}
 	return def
+}
+
+var cfgModelRe = regexp.MustCompile(`(?m)^\s*-?\s*(?:model|model_name):\s*["']?([^"'#\s]+)`)
+
+// configuredModels returns model names / litellm model strings present in the
+// gateway config, or nil if the config can't be read (then nothing is marked removed).
+func configuredModels() map[string]bool {
+	b, err := os.ReadFile(env("LITELLM_CONFIG", "/opt/litellm/config.yaml"))
+	if err != nil {
+		return nil
+	}
+	set := map[string]bool{}
+	for _, m := range cfgModelRe.FindAllStringSubmatch(string(b), -1) {
+		set[m[1]] = true
+	}
+	return set
 }
 
 func build() Summary {
@@ -104,6 +122,8 @@ func build() Summary {
 	if b, err := os.ReadFile(env("DAILY_QUOTA_STATE", "/opt/litellm/daily_quota_state.json")); err == nil {
 		_ = json.Unmarshal(b, &blocked)
 	}
+
+	configured := configuredModels()
 
 	day := func(i int) string { return now.AddDate(0, 0, -i).Format("2006-01-02") }
 
@@ -172,6 +192,10 @@ func build() Summary {
 		default:
 			row.Level, row.Status = "ok", "✅ 正常"
 		}
+		if configured != nil && !configured[m] {
+			row.Removed = true
+			row.Level, row.Status = "removed", "🗑 已从网关移除"
+		}
 		if until, ok := blocked[m]; ok {
 			if t, err := time.Parse(time.RFC3339, until); err == nil && t.After(time.Now()) {
 				row.BlockedTo = t.In(loc).Format("01-02 15:04")
@@ -191,7 +215,7 @@ func build() Summary {
 		}
 	}
 	// problems first
-	rank := map[string]int{"bad": 0, "warn": 1, "ok": 2, "idle": 3}
+	rank := map[string]int{"bad": 0, "warn": 1, "ok": 2, "idle": 3, "removed": 4}
 	sort.SliceStable(s.Models, func(i, j int) bool { return rank[s.Models[i].Level] < rank[s.Models[j].Level] })
 	return s
 }
@@ -233,6 +257,7 @@ td.n{text-align:right;font-variant-numeric:tabular-nums}
 .cells{display:flex;gap:3px}.c{width:14px;height:14px;border-radius:3px;background:var(--none)}
 .c.ok{background:var(--ok)}.c.mixed{background:var(--mixed)}.c.fail{background:var(--fail)}
 .err{color:var(--mute);font-size:12px;margin-top:4px;word-break:break-all}
+tr.removed td{opacity:.5}
 tr.bad td{background:color-mix(in srgb,var(--fail) 7%,transparent)}
 .legend{color:var(--mute);font-size:12px;display:flex;gap:14px;flex-wrap:wrap;align-items:center}
 .legend span{display:inline-flex;gap:5px;align-items:center}
@@ -250,7 +275,7 @@ a{color:inherit}
 {{range .Models}}<tr class="{{.Level}}"><td class="m">{{.Model}}</td>
 <td><div class="cells">{{range .Days}}<div class="c {{.Class}}" title="{{.Date}}  成功 {{.OK}} / 失败 {{.Fail}}"></div>{{end}}</div></td>
 <td class="n">{{.OK}}</td><td class="n">{{.Fail}}</td><td class="n">{{.Rate}}</td>
-<td>{{.Status}}{{if .BlockedTo}}<br>⏸ 额度用完，屏蔽至 {{.BlockedTo}}{{end}}{{if and .LastError (ne .Level "ok")}}<div class="err">最近错误：{{.LastError}}</div>{{end}}</td></tr>
+<td>{{.Status}}{{if .BlockedTo}}<br>⏸ 额度用完，屏蔽至 {{.BlockedTo}}{{end}}{{if and .LastError (or (eq .Level "bad") (eq .Level "warn"))}}<div class="err">最近错误：{{.LastError}}</div>{{end}}</td></tr>
 {{end}}</table></div>
 <div class="legend"><span><i class="c ok"></i>全部成功</span><span><i class="c mixed"></i>有成功有失败</span><span><i class="c fail"></i>全部失败</span><span><i class="c"></i>无调用</span><span>鼠标悬停方块可看当天次数</span></div>
 {{if .Blocked}}<h2>⏸ 今日额度已用完（暂停调用）</h2><div class="card"><table>
