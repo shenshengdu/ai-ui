@@ -27,23 +27,29 @@ const financeMaxBody = 2 << 20 // 2 MiB read limit
 
 var financeSymbolRe = regexp.MustCompile(`^[A-Z0-9.\-]{1,15}$`)
 
+var financeThemeRe = regexp.MustCompile(`^[a-z_]{1,32}$`)
+
 var financeHTTPClient = &http.Client{}
 
 func isFinanceTool(name string) bool {
 	switch name {
-	case "finance_stock", "finance_technical", "finance_valuation", "finance_market":
+	case "finance_stock", "finance_technical", "finance_valuation", "finance_market", "finance_market_news", "finance_decision", "finance_quote", "finance_global_market":
 		return true
 	}
 	return false
 }
 
 func financeBuiltInTools() []*Tool {
+	return append(financeBaseTools(), financeQuickTools()...)
+}
+
+func financeBaseTools() []*Tool {
 	symbolSchema := `{"type":"object","properties":{"symbol":{"type":"string","description":"股票代码，例如 AAPL、NVDA、MSFT、TSLA。"}},"required":["symbol"],"additionalProperties":false}`
 	return []*Tool{
 		{
 			ID:          uuid.New().String(),
 			Name:        "finance_stock",
-			Description: "获取股票综合金融数据，包括实时行情、基本面、TTM估值、技术分析、Finnhub相关新闻和Google News相关新闻。适合回答个股分析、估值、财务状况和近期催化剂等问题。",
+			Description: "获取股票综合金融数据：实时行情、基本面（SEC 口径）、TTM 估值、技术分析，以及 sec_events（SEC 申报：8-K、10-Q/10-K、Form 4 内部人交易、13D/13G 持股）、company_ir（公司 IR 公告与下次财报日；多数公司没有可用订阅，available=false 属正常）、news（多源个股新闻，含 content_level / publisher_count / article_type）、analyst（分析师评级与目标价，为他人观点）、data_context（各模块数据日期与交叉验证警告）和 Google News。证据优先级：SEC 申报 > 公司 IR > 新闻 > 分析师；新闻只是线索，不是事实。某模块无数据或 available=false 时如实说明，不得用记忆补写。适合回答个股分析、估值、财务状况和近期催化剂等问题。",
 			InputSchema: symbolSchema,
 			IsEnabled:   true,
 		},
@@ -66,6 +72,20 @@ func financeBuiltInTools() []*Tool {
 			Name:        "finance_market",
 			Description: "获取全球市场综合数据。market=overview 获取全球市场行情；market=nasdaq100 获取纳斯达克100量化分析，包括Trend、Momentum、Volatility、Breadth、Volume、Money Flow、Regime和Composite；market=sp500 获取标普500量化分析，包括Trend、Momentum、Volatility、Breadth、Volume、Money Flow、Regime和Composite。",
 			InputSchema: `{"type":"object","properties":{"market":{"type":"string","enum":["overview","nasdaq100","sp500"],"description":"市场类型：overview=全球市场行情，nasdaq100=纳斯达克100量化分析，sp500=标普500量化分析。不传时默认为overview。"}},"additionalProperties":false}`,
+			IsEnabled:   true,
+		},
+		{
+			ID:          uuid.New().String(),
+			Name:        "finance_decision",
+			Description: "获取个股“决策参考”的结构化结果：由平台用确定性规则，基于基本面/技术面/估值/大盘四个量化模型的原始状态，算出四维打分（10.1）、基础档位（10.2）、6 类风险信号及触发证据（10.3）、最终档位，并预先生成第一节核心结论、10.1–10.3 和第七节四维方向的文字（render）。做综合研究（类型 E）时，在 finance_stock / finance_technical / finance_valuation / finance_market 之后最后调用一次。报告里的最终档位、风险信号数量、核心结论、交叉验证必须原样引用这份结果，不得自行重算或改写档位和数字；第 6 类“已证实的重大负面新闻”不自动触发，需你按 SOP 判断，触发时改用 tier_if_news_signal。大盘基准自动选择：纳斯达克100成分股用 nasdaq100，其余用 sp500。errors 非空表示某模型取数失败，该维度已按缺失处理，必须在数据说明里写明。",
+			InputSchema: `{"type":"object","properties":{"symbol":{"type":"string","description":"股票代码，例如 AAPL、NVDA、MSFT、TSLA。"},"market":{"type":"string","enum":["sp500","nasdaq100"],"description":"可选：强制指定大盘基准；不传则自动选择。"}},"required":["symbol"],"additionalProperties":false}`,
+			IsEnabled:   true,
+		},
+		{
+			ID:          uuid.New().String(),
+			Name:        "finance_market_news",
+			Description: "获取市场层新闻（不针对个股）：货币政策、通胀与就业数据、贸易与地缘、大宗商品、利率汇率、大盘综述、AI/芯片板块、加密、中国/亚洲市场，来自 Finnhub 与 Google News 多源去重聚合。返回 data（按重要性排序的新闻簇，含 themes、scope、publisher_count、content_level、url）和 theme_digest（各主题热度与代表新闻）。只能作为市场背景线索，不是事实：themes 只表示话题，不表示利好利空；theme_digest 条数只反映话题热度，不反映多空方向；content_level=headline_only 时只能复述标题含义，不得补充细节；publisher_count 表示不同发布方数量，同一通讯社稿件被多家转载不等于独立证实。不得据此给出买卖建议或修改任何模型评分。无数据或来源失败时写“暂无市场新闻数据”，不得用记忆补写行情。同一对话只调用一次。",
+			InputSchema: `{"type":"object","properties":{"days":{"type":"integer","minimum":1,"maximum":7,"description":"回看天数，默认 2。"},"limit":{"type":"integer","minimum":1,"maximum":40,"description":"最多返回条数，默认 15。"},"theme":{"type":"string","enum":["monetary_policy","inflation_data","growth_jobs","trade_geopolitics","commodities","rates_fx","market_wrap","ai_tech","earnings_season","crypto","china_asia"],"description":"可选：只看某个主题。"}},"additionalProperties":false}`,
 			IsEnabled:   true,
 		},
 	}
@@ -100,6 +120,9 @@ func financeTool(ctx context.Context, name, args string) providers.ToolOutput {
 		Symbol string   `json:"symbol"`
 		Peers  []string `json:"peers"`
 		Market string   `json:"market"`
+		Days   int      `json:"days"`
+		Limit  int      `json:"limit"`
+		Theme  string   `json:"theme"`
 	}
 	if strings.TrimSpace(args) != "" {
 		if err := json.Unmarshal([]byte(args), &p); err != nil {
@@ -112,7 +135,7 @@ func financeTool(ctx context.Context, name, args string) providers.ToolOutput {
 	prefix := ""
 
 	switch name {
-	case "finance_stock", "finance_technical", "finance_valuation":
+	case "finance_stock", "finance_technical", "finance_valuation", "finance_decision":
 		sym, ok := normalizeSymbol(p.Symbol)
 		if !ok {
 			return financeError("invalid stock symbol: %q", p.Symbol)
@@ -120,6 +143,12 @@ func financeTool(ctx context.Context, name, args string) providers.ToolOutput {
 		switch name {
 		case "finance_stock":
 			path = "/api/v1/openclaw/stock/" + url.PathEscape(sym)
+		case "finance_decision":
+			path = "/api/v1/decision/" + url.PathEscape(sym)
+			timeout = 180 * time.Second
+			if p.Market == "sp500" || p.Market == "nasdaq100" {
+				path += "?market=" + p.Market
+			}
 		case "finance_technical":
 			path = "/api/v1/quant/technical/" + url.PathEscape(sym)
 			timeout = 120 * time.Second
@@ -163,6 +192,29 @@ func financeTool(ctx context.Context, name, args string) providers.ToolOutput {
 		default:
 			return financeError("invalid market %q (use overview, nasdaq100 or sp500)", p.Market)
 		}
+	case "finance_market_news":
+		days, limit := p.Days, p.Limit
+		if days < 1 || days > 7 {
+			days = 2
+		}
+		if limit < 1 || limit > 40 {
+			limit = 15
+		}
+		path, timeout = fmt.Sprintf("/api/v1/market-news?days=%d&limit=%d", days, limit), 60*time.Second
+		if p.Theme != "" {
+			if !financeThemeRe.MatchString(p.Theme) {
+				return financeError("invalid theme %q", p.Theme)
+			}
+			path += "&theme=" + url.QueryEscape(p.Theme)
+		}
+	case "finance_quote":
+		sym, ok := normalizeSymbol(p.Symbol)
+		if !ok {
+			return financeError("invalid stock symbol: %q", p.Symbol)
+		}
+		path, timeout = "/api/v1/quote/"+url.PathEscape(sym), 15*time.Second
+	case "finance_global_market":
+		path, timeout = "/api/v1/market", 30*time.Second
 	default:
 		return financeError("unknown tool %s", name)
 	}
@@ -197,6 +249,12 @@ func financeTool(ctx context.Context, name, args string) providers.ToolOutput {
 	var compact bytes.Buffer
 	if err := json.Compact(&compact, body); err != nil {
 		return financeError("invalid JSON: %s", truncateRunes(string(body), 500))
+	}
+	switch name {
+	case "finance_quote":
+		return providers.ToolOutput{Content: formatFinanceQuote(compact.Bytes())}
+	case "finance_global_market":
+		return providers.ToolOutput{Content: formatGlobalMarket(compact.Bytes())}
 	}
 	return providers.ToolOutput{Content: prefix + compact.String()}
 }

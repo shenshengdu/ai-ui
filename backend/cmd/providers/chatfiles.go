@@ -153,7 +153,7 @@ func ensureDeepSeekReasoningContent(p *openai.ChatCompletionNewParams) {
 // OpenAI-compatible Chat Completions API does not accept.
 // Keep this provider-specific: DeepSeek still needs reasoning_content.
 func adaptGroqParams(p *openai.ChatCompletionNewParams, baseURL string) {
-	if !strings.Contains(strings.ToLower(baseURL), "api.groq.com") {
+	if !strings.Contains(strings.ToLower(baseURL), "api.groq.com") && !isGatewayBaseURL(baseURL) {
 		return
 	}
 

@@ -57,6 +57,7 @@ type Summary struct {
 	Days      int        `json:"days"`
 	Models    []ModelRow `json:"models"`
 	Alerts    int        `json:"alerts"`
+	Warns     int        `json:"warns"`
 	Blocked   []ModelRow `json:"-"`
 	Error     string     `json:"error,omitempty"`
 }
@@ -177,8 +178,13 @@ func build() Summary {
 				s.Blocked = append(s.Blocked, row)
 			}
 		}
-		if row.Level == "bad" || (row.Level == "warn" && row.Streak >= warnDays) {
-			s.Alerts++
+		if _, has := data[m]; has {
+			switch row.Level {
+			case "bad":
+				s.Alerts++
+			case "warn":
+				s.Warns++
+			}
 		}
 		if _, has := data[m]; has {
 			s.Models = append(s.Models, row)
@@ -216,6 +222,7 @@ main{max-width:980px;margin:0 auto;padding:20px 16px 40px}
 h1{font-size:20px;margin:0 0 4px}.sub{color:var(--mute);font-size:12px;margin-bottom:16px}
 .banner{padding:10px 14px;border-radius:8px;margin-bottom:14px;font-weight:600}
 .banner.bad{background:color-mix(in srgb,var(--fail) 15%,transparent);color:var(--fail)}
+.banner.warn{background:color-mix(in srgb,var(--mixed) 16%,transparent);color:color-mix(in srgb,var(--mixed) 70%,var(--fg))}
 .banner.good{background:color-mix(in srgb,var(--ok) 13%,transparent);color:var(--ok)}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow-x:auto;margin-bottom:16px}
 table{border-collapse:collapse;width:100%;min-width:640px}
@@ -235,8 +242,9 @@ a{color:inherit}
 <h1>免费模型网关 · 模型状态</h1>
 <div class="sub">近 {{.Days}} 天 · {{.TZ}} · 生成于 {{.Generated}} · <a href="">刷新</a></div>
 {{if .Error}}<div class="banner bad">{{.Error}}</div>{{else}}
-{{if .Alerts}}<div class="banner bad">有 {{.Alerts}} 个模型连续多天调用全部失败，可能需要检查 API Key / 账号</div>
-{{else}}<div class="banner good">所有有调用的模型都有成功记录</div>{{end}}{{end}}
+{{if .Alerts}}<div class="banner bad">有 {{.Alerts}} 个模型连续 {{.Days}} 天以上调用全部失败，请检查 API Key / 账号</div>{{end}}
+{{if .Warns}}<div class="banner warn">有 {{.Warns}} 个模型近期只有失败，请查看下方的错误原因</div>{{end}}
+{{if not (or .Alerts .Warns)}}<div class="banner good">所有有调用的模型都有成功记录</div>{{end}}{{end}}
 <div class="card"><table>
 <tr><th>模型</th><th>每日（旧 → 今天）</th><th class="n">成功</th><th class="n">失败</th><th class="n">成功率</th><th>状态</th></tr>
 {{range .Models}}<tr class="{{.Level}}"><td class="m">{{.Model}}</td>
