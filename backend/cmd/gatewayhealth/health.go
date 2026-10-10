@@ -19,6 +19,7 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Bajahaw/ai-ui/cmd/auth"
@@ -41,6 +42,7 @@ type DayCell struct {
 
 type ModelRow struct {
 	Model     string    `json:"model"`
+	Name      string    `json:"gateway_name,omitempty"`
 	OK        int       `json:"ok"`
 	Fail      int       `json:"fail"`
 	Rate      string    `json:"rate"`
@@ -54,14 +56,15 @@ type ModelRow struct {
 }
 
 type Summary struct {
-	Generated string     `json:"generated"`
-	TZ        string     `json:"tz"`
-	Days      int        `json:"days"`
-	Models    []ModelRow `json:"models"`
-	Alerts    int        `json:"alerts"`
-	Warns     int        `json:"warns"`
-	Blocked   []ModelRow `json:"-"`
-	Error     string     `json:"error,omitempty"`
+	Generated  string     `json:"generated"`
+	TZ         string     `json:"tz"`
+	Days       int        `json:"days"`
+	Models     []ModelRow `json:"models"`
+	Alerts     int        `json:"alerts"`
+	Warns      int        `json:"warns"`
+	Configured int        `json:"configured"`
+	Blocked    []ModelRow `json:"-"`
+	Error      string     `json:"error,omitempty"`
 }
 
 func Handler() http.Handler {
@@ -78,20 +81,42 @@ func env(k, def string) string {
 	return def
 }
 
-var cfgModelRe = regexp.MustCompile(`(?m)^\s*-?\s*(?:model|model_name):\s*["']?([^"'#\s]+)`)
+var (
+	cfgNameRe  = regexp.MustCompile(`^\s*-\s*model_name:\s*["']?([^"'#\s]+)`)
+	cfgModelRe = regexp.MustCompile(`^\s*model:\s*["']?([^"'#\s]+)`)
+)
 
-// configuredModels returns model names / litellm model strings present in the
-// gateway config, or nil if the config can't be read (then nothing is marked removed).
-func configuredModels() map[string]bool {
+// gatewayConfig reads the LiteLLM config. It returns
+//
+//	known:  every model_name and litellm model string (for "removed" detection)
+//	names:  litellm model string -> gateway model_name(s), in config order
+//	order:  litellm model strings in config order
+//
+// known is nil if the config can't be read (then nothing is marked removed).
+func gatewayConfig() (known map[string]bool, names map[string][]string, order []string) {
 	b, err := os.ReadFile(env("LITELLM_CONFIG", "/opt/litellm/config.yaml"))
 	if err != nil {
-		return nil
+		return nil, nil, nil
 	}
-	set := map[string]bool{}
-	for _, m := range cfgModelRe.FindAllStringSubmatch(string(b), -1) {
-		set[m[1]] = true
+	known, names = map[string]bool{}, map[string][]string{}
+	cur := ""
+	for _, line := range strings.Split(string(b), "\n") {
+		if m := cfgNameRe.FindStringSubmatch(line); m != nil {
+			cur = m[1]
+			known[cur] = true
+			continue
+		}
+		if m := cfgModelRe.FindStringSubmatch(line); m != nil && cur != "" {
+			lm := m[1]
+			known[lm] = true
+			if _, seen := names[lm]; !seen {
+				order = append(order, lm)
+			}
+			names[lm] = append(names[lm], cur)
+			cur = ""
+		}
 	}
-	return set
+	return known, names, order
 }
 
 func build() Summary {
@@ -123,10 +148,16 @@ func build() Summary {
 		_ = json.Unmarshal(b, &blocked)
 	}
 
-	configured := configuredModels()
+	configured, gwNames, gwOrder := gatewayConfig()
 
+	s.Configured = len(gwOrder)
 	day := func(i int) string { return now.AddDate(0, 0, -i).Format("2006-01-02") }
 
+	for _, m := range gwOrder {
+		if _, ok := data[m]; !ok {
+			data[m] = map[string]dayRec{}
+		}
+	}
 	models := make([]string, 0, len(data))
 	for m := range data {
 		models = append(models, m)
@@ -140,7 +171,7 @@ func build() Summary {
 
 	for _, m := range models {
 		days := data[m]
-		row := ModelRow{Model: m}
+		row := ModelRow{Model: m, Name: strings.Join(gwNames[m], ", ")}
 		for i := n - 1; i >= 0; i-- {
 			d := day(i)
 			r := days[d]
@@ -254,6 +285,7 @@ table{border-collapse:collapse;width:100%;min-width:640px}
 th,td{padding:9px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
 th{font-size:12px;color:var(--mute);font-weight:500}tr:last-child td{border-bottom:0}
 td.n{text-align:right;font-variant-numeric:tabular-nums}
+.sm{color:var(--mute);font-size:11px}
 .m{font-family:ui-monospace,Menlo,monospace;font-size:13px}
 .cells{display:flex;gap:3px}.c{width:14px;height:14px;border-radius:3px;background:var(--none)}
 .c.ok{background:var(--ok)}.c.mixed{background:var(--mixed)}.c.fail{background:var(--fail)}
@@ -266,14 +298,14 @@ h2{font-size:15px;margin:18px 0 8px}
 a{color:inherit}
 </style></head><body><main>
 <h1>免费模型网关 · 模型状态</h1>
-<div class="sub">近 {{.Days}} 天 · {{.TZ}} · 生成于 {{.Generated}} · <a href="">刷新</a></div>
+<div class="sub">网关共 {{.Configured}} 个模型 · 近 {{.Days}} 天 · {{.TZ}} · 生成于 {{.Generated}} · <a href="">刷新</a></div>
 {{if .Error}}<div class="banner bad">{{.Error}}</div>{{else}}
 {{if .Alerts}}<div class="banner bad">有 {{.Alerts}} 个模型连续 {{.Days}} 天以上调用全部失败，请检查 API Key / 账号</div>{{end}}
 {{if .Warns}}<div class="banner warn">有 {{.Warns}} 个模型近期只有失败，请查看下方的错误原因</div>{{end}}
 {{if not (or .Alerts .Warns)}}<div class="banner good">所有有调用的模型都有成功记录</div>{{end}}{{end}}
 <div class="card"><table>
 <tr><th>模型</th><th>每日（旧 → 今天）</th><th class="n">成功</th><th class="n">失败</th><th class="n">成功率</th><th>状态</th></tr>
-{{range .Models}}<tr class="{{.Level}}"><td class="m">{{.Model}}</td>
+{{range .Models}}<tr class="{{.Level}}"><td class="m">{{if .Name}}<b>{{.Name}}</b><div class="sm">{{.Model}}</div>{{else}}{{.Model}}{{end}}</td>
 <td><div class="cells">{{range .Days}}<div class="c {{.Class}}" title="{{.Date}}  成功 {{.OK}} / 失败 {{.Fail}}"></div>{{end}}</div></td>
 <td class="n">{{.OK}}</td><td class="n">{{.Fail}}</td><td class="n">{{.Rate}}</td>
 <td>{{.Status}}{{if .BlockedTo}}<br>⏸ 额度用完，屏蔽至 {{.BlockedTo}}{{end}}{{if and .LastError (or (eq .Level "bad") (eq .Level "warn"))}}<div class="err">最近错误：{{.LastError}}</div>{{end}}</td></tr>
