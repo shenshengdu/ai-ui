@@ -210,7 +210,8 @@ func build() Summary {
 				s.Warns++
 			}
 		}
-		if _, has := data[m]; has {
+		// removed from gateway and no calls in the window -> drop from the page
+		if _, has := data[m]; has && !(row.Removed && row.OK+row.Fail == 0) {
 			s.Models = append(s.Models, row)
 		}
 	}
