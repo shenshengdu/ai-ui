@@ -207,9 +207,13 @@ func publishReportTool(ctx context.Context, args string) providers.ToolOutput {
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "已提交到 %s（%s，commit %s），Vercel 部署约 1–2 分钟后上线：\n", repo, branch, short(sha))
-	order := []string{"zh", "en", "ja"}
+	order := []string{"zh", "zh-hant", "en", "ja"}
 	for _, l := range order {
-		if _, ok := langs[l]; !ok {
+		src := l
+		if l == "zh-hant" {
+			src = "zh" // generated from the Simplified Chinese file at build time
+		}
+		if _, ok := langs[src]; !ok {
 			continue
 		}
 		prefix := ""
@@ -361,7 +365,32 @@ func cleanReportBody(body string) string {
 		}
 		break
 	}
+	for i := range out {
+		out[i] = fixCJKBold(out[i])
+	}
 	return strings.TrimSpace(strings.Join(out, "\n")) + "\n"
+}
+
+// fixCJKBold moves trailing punctuation out of **bold** spans on one line:
+// "**基本面：**模型" does not render as bold in CommonMark, "**基本面**：模型" does.
+func fixCJKBold(line string) string {
+	parts := strings.Split(line, "**")
+	if len(parts) < 3 || len(parts)%2 == 0 {
+		return line
+	}
+	const punct = "：:，,。；;、！？）)」』】"
+	for i := 1; i < len(parts); i += 2 {
+		inner := []rune(parts[i])
+		j := len(inner)
+		for j > 0 && strings.ContainsRune(punct, inner[j-1]) {
+			j--
+		}
+		if j > 0 && j < len(inner) {
+			parts[i+1] = string(inner[j:]) + parts[i+1]
+			parts[i] = string(inner[:j])
+		}
+	}
+	return strings.Join(parts, "**")
 }
 
 func yamlStr(s string) string {
