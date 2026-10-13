@@ -52,7 +52,7 @@ func publishBuiltInTools() []*Tool {
 			`"company":{"type":"string","description":"公司英文全称，如 NVIDIA Corporation"},` +
 			`"exchange":{"type":"string","description":"交易所，如 NASDAQ、NYSE"},` +
 			`"report_type":{"type":"string","enum":["comprehensive","valuation","technical","market","news"]},` +
-			`"data_date":{"type":"string","description":"数据日期 YYYY-MM-DD"},` +
+			`"data_date":{"type":"string","description":"数据日期 YYYY-MM-DD：取行情数据的交易日（如参考价日期），不要用估值计算日或今天的日期"},` +
 			`"tier":{"type":"string","enum":["","positive","mod_positive","neutral","mod_cautious","cautious"],"description":"决策参考档位，仅综合研究填写"},` +
 			`"score_sum":{"type":"integer"},` +
 			`"scores":{"type":"object","properties":{"fundamental":{"type":["integer","null"]},"technical":{"type":["integer","null"]},"valuation":{"type":["integer","null"]},"market":{"type":["integer","null"]}},"description":"四维分值 1/0/-1，缺失为 null"},` +
@@ -135,6 +135,33 @@ func publishReportTool(ctx context.Context, args string) providers.ToolOutput {
 		}
 	}
 	a.Zh.Body = cleanReportBody(a.Zh.Body)
+	// score_sum: fill in from the four scores when the model left it out
+	if a.ScoreSum == nil && len(a.Scores) > 0 {
+		sum := 0
+		for _, v := range a.Scores {
+			if v != nil {
+				sum += *v
+			}
+		}
+		a.ScoreSum = &sum
+	}
+	// search aliases: drop invisible characters, empties and duplicates
+	clean := []string{}
+	seenAlias := map[string]bool{}
+	for _, al := range a.AliasesSearch {
+		al = strings.TrimSpace(strings.Map(func(r rune) rune {
+			switch r {
+			case '\u200b', '\u200c', '\u200d', '\u2060', '\ufeff':
+				return -1
+			}
+			return r
+		}, al))
+		if al != "" && !seenAlias[al] {
+			seenAlias[al] = true
+			clean = append(clean, al)
+		}
+	}
+	a.AliasesSearch = clean
 
 	var warnings []string
 	langs := map[string]*reportLang{"zh": a.Zh}
