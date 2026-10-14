@@ -387,6 +387,33 @@ function updateAssistantMessageAfterComplete(
 
   // Sync immediately to update UI
   syncConversations();
+
+  // 后端可能在流结束后替换了内容（如同行比较的排序表），重新读取并以后端保存的版本为准；失败则保留流式内容
+  const realId = realMessageId;
+  const delays = streamingState.content.includes("核心对比总览") ? [0, 1500] : [0];
+  void (async () => {
+    for (const delay of delays) {
+      try {
+        if (delay) await new Promise((r) => setTimeout(r, delay));
+        const msgs = (await conversationsAPI.fetchConversationMessages(
+          conversationId,
+        )) as any;
+        const backendMsg = msgs?.[realId];
+        if (!backendMsg || typeof backendMsg.content !== "string") continue;
+        const c = manager.getConversation(conversationId);
+        const fm = c?.messages.find((m) => m.id === realId.toString());
+        if (!c || !fm) return;
+        if (fm.content === backendMsg.content) continue;
+        fm.content = backendMsg.content;
+        const bm = (c.backendConversation?.messages as any)?.[realId];
+        if (bm) bm.content = backendMsg.content;
+        syncConversations();
+        return;
+      } catch {
+        /* keep streamed content */
+      }
+    }
+  })();
 }
 
 export const useConversations = () => {
