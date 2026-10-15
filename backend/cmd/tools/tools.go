@@ -131,7 +131,7 @@ func ExecuteMCPTool(ctx context.Context, toolCall providers.ToolCall, user, conv
 			return viewDocumentPageTool(toolCall.Args, user, convID)
 		case "generate_image":
 			return generateImageTool(toolCall.Args, user, convID)
-		case "finance_stock", "finance_technical", "finance_valuation", "finance_market", "finance_market_news", "finance_decision", "finance_quote", "finance_global_market":
+		case "finance_stock", "finance_technical", "finance_valuation", "finance_market", "finance_market_news", "finance_decision", "finance_peer_compare", "finance_peer_group_save", "finance_peer_quant", "finance_warmup_status", "finance_quote", "finance_global_market":
 			return financeTool(ctx, tool.Name, toolCall.Args)
 		case "publish_report":
 			return publishReportTool(ctx, toolCall.Args)

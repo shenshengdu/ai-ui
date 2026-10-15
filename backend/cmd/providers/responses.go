@@ -219,7 +219,7 @@ func formatResponsesError(err error) error {
 	return err
 }
 
-func sendResponsesStream(ctx context.Context, client openai.Client, model string, params RequestParams, sc utils.StreamClient) (*ChatCompletionMessage, error) {
+func sendResponsesStreamOnce(ctx context.Context, client openai.Client, model string, params RequestParams, sc utils.StreamClient) (*ChatCompletionMessage, error) {
 	req := responses.ResponseNewParams{
 		Model: shared.ResponsesModel(model),
 		Input: responses.ResponseNewParamsInputUnion{
@@ -328,10 +328,17 @@ func sendResponsesStream(ctx context.Context, client openai.Client, model string
 	)
 
 	if !cancelled {
+		sentAny := content.Len() > 0 || reasoning.Len() > 0 || len(toolCalls) > 0
 		if err := stream.Err(); err != nil {
+			if w, ok := responsesRateLimitWait(err); ok && !sentAny {
+				return nil, &responsesRetryable{err: formatResponsesError(err), wait: w}
+			}
 			return nil, formatResponsesError(err)
 		}
 		if eventErr != nil {
+			if w, ok := responsesRateLimitWait(eventErr); ok && !sentAny {
+				return nil, &responsesRetryable{err: eventErr, wait: w}
+			}
 			return nil, eventErr
 		}
 	}

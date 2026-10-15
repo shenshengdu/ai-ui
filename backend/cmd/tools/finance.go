@@ -33,7 +33,7 @@ var financeHTTPClient = &http.Client{}
 
 func isFinanceTool(name string) bool {
 	switch name {
-	case "finance_stock", "finance_technical", "finance_valuation", "finance_market", "finance_market_news", "finance_decision", "finance_quote", "finance_global_market":
+	case "finance_stock", "finance_technical", "finance_valuation", "finance_market", "finance_market_news", "finance_decision", "finance_quote", "finance_global_market", "finance_peer_compare", "finance_peer_group_save", "finance_peer_quant", "finance_warmup_status":
 		return true
 	}
 	return false
@@ -83,6 +83,34 @@ func financeBaseTools() []*Tool {
 		},
 		{
 			ID:          uuid.New().String(),
+			Name:        "finance_peer_group_save",
+			Description: "保存同行分组（标准工作流：AI 自动分组 → 人工确认 → 固定分组 → 量化分析）。AI 用 web_search 核实业务后，把平台候选分成五类并先以 status=ai_proposed 保存（提案，不参与统计）；用户在对话里明确确认后，再以 status=approved 且 user_confirmed=true 保存为固定分组。五类：core_symbols 核心同行（业务高度重合）、related_symbols 相关同行（部分重合或同产业链）、special_symbols 特殊场景同行（仅特定场景可参照）、excluded_symbols 不可比、pending_symbols 待核实（证据不足）；同一家公司只能在一个类别里，且至少要有 1 个核心同行才能 approved。evidence 用 {代码: 一句话依据} 记录分类理由。未经用户明确确认，绝不能传 approved 或 user_confirmed=true。这是写入操作，一次对话只在需要时调用。",
+			InputSchema: `{"type":"object","properties":{"symbol":{"type":"string","description":"被分析的目标公司代码（例如 MSFT），永远不是被分类的同行；每个目标公司只保存一次，同行放进各类别名单，名单里不能包含目标公司自身。"},"status":{"type":"string","enum":["ai_proposed","approved"],"description":"ai_proposed=AI 提案（默认）；approved=用户已确认的固定分组。"},"core_symbols":{"type":"string","description":"核心同行，英文逗号分隔，最多 3 家（超过会被平台拒绝；只保留业务重合度最高的 3 家，其余放 related_symbols）。"},"related_symbols":{"type":"string","description":"相关同行，英文逗号分隔。"},"special_symbols":{"type":"string","description":"特殊场景同行，英文逗号分隔。"},"excluded_symbols":{"type":"string","description":"不可比，英文逗号分隔。"},"pending_symbols":{"type":"string","description":"待核实，英文逗号分隔。"},"evidence":{"type":"object","additionalProperties":{"type":"string"},"description":"可选：{代码: 分类依据}。"},"note":{"type":"string","description":"可选：备注。"},"user_confirmed":{"type":"boolean","description":"仅当用户在对话里明确确认了这份分组时才为 true；status=approved 必须为 true。"}},"required":["symbol"],"additionalProperties":false}`,
+			IsEnabled:   true,
+		},
+		{
+			ID:          uuid.New().String(),
+			Name:        "finance_peer_quant",
+			Description: "【调用前必须先用 read_skill 读取 us-stock-analysis 的 SOP，并按其中 Step 6.9 执行。】同业量化比较（经营质量、估值、归因）。只在该股票的同行分组已经人工确认并固定后才返回量化结果；分组未固定时只返回第一层并说明原因，此时不得用记忆或网页数字代替，应告诉用户先完成分组确认。返回已确认分组下的核心同行/扩展同行中位数、目标公司相对位置、归因结论、数据限制和 render 文本。只描述相对位置，不排名，不给买卖建议；所有数值和结论只能引用本工具返回的内容，不得自行补算或改写口径。首次调用需要现算每家同行的估值，可能较慢（最长约 3–5 分钟）。",
+			InputSchema: `{"type":"object","properties":{"symbol":{"type":"string","description":"目标股票代码，例如 V、NVDA。"},"peer_symbols":{"type":"string","description":"可选：用户在本次请求里明确点名的同行代码，英文逗号分隔（例如 MA,AXP）。只在用户自己点名了同行时传；传入后平台直接按这些同行做量化比较，不使用存档分组，也不需要分组确认。symbol 永远是被分析的目标公司，不要把目标公司放进 peer_symbols。"}},"required":["symbol"],"additionalProperties":false}`,
+			IsEnabled:   true,
+		},
+		{
+			ID:          uuid.New().String(),
+			Name:        "finance_peer_compare",
+			Description: "【调用本工具前，必须先用 read_skill 读取名为 us-stock-analysis 的 SOP（同一对话已读过则不必重复），并严格按其中 Step 6.8 执行：先调用本工具，再用 web_search 核实业务，最后按模板输出；不得只列出平台返回的名单。】同业比较（当前只提供第一层：业务可比性）。以一只股票为中心，返回平台筛选的同类股票（来自 Finnhub，已剔除非美股和市值悬殊的公司）、每家的板块/行业、平台的可比分级和业务描述原文。收入结构、商业模式、产业链位置平台不提供，需要你按 SOP 用 web_search 核实并判定每家同行可比/部分可比/不可比。用户明确给出同行时放进 peer_symbols；不传则由平台自动筛选。返回的 workflow 说明分组是否已经人工确认；已确认的固定分组会自动采用，你不需要也不应该用 core_symbols 改名单。当前版本不返回、也不得推测估值倍数、增速、利润率、同类中位数、溢价/折价或排名；不得给出买卖建议。平台名单缺少可作核心的同行，或最接近的同业被市值比规则误排时，可用 extra_symbols 补充候选重新调用（同一对话最多 1 次），补充的每家必须写明理由，校验未通过的见 group.ai_supplement.rejected。",
+			InputSchema: `{"type":"object","properties":{"symbol":{"type":"string","description":"目标股票代码，例如 V、AAPL。"},"peer_symbols":{"type":"string","description":"可选：用户明确给出的同行代码，英文逗号分隔，例如 MA,PYPL。不传则自动筛选。"},"core_symbols":{"type":"string","description":"可选：你经 web_search 核实后判定为“可比”的同行代码，英文逗号分隔；用于覆盖平台的行业分级。"},"extra_symbols":{"type":"string","description":"可选：AI 补充候选，英文逗号分隔，最多 5 个。仅当平台名单里没有任何可作核心同行的公司，或业务最接近的同业只因市值比规则被排除（group.excluded 里 kind=size_gap）时使用；平台会校验美股与市值后并入，来源标注 ai_supplement。"}},"required":["symbol"],"additionalProperties":false}`,
+			IsEnabled:   true,
+		},
+		{
+			ID:          uuid.New().String(),
+			Name:        "finance_warmup_status",
+			Description: "查询平台对某只股票的预热（缓存重建）状态：排队中、进行中（含进度和已用时间）、已完成、失败或无记录。只读、秒级返回、不会触发预热、也不会等待。用于：①做综合研究或同业量化比较前先查一次，把进度告诉用户；②用户问“预热好了吗”。返回的 message_zh 是给用户看的中文说明，转述其中的进度和用时，不要自己推算完成时间。",
+			InputSchema: `{"type":"object","properties":{"symbol":{"type":"string","description":"目标股票代码，例如 GOOG、V。"}},"required":["symbol"],"additionalProperties":false}`,
+			IsEnabled:   true,
+		},
+		{
+			ID:          uuid.New().String(),
 			Name:        "finance_market_news",
 			Description: "获取市场层新闻（不针对个股）：货币政策、通胀与就业数据、贸易与地缘、大宗商品、利率汇率、大盘综述、AI/芯片板块、加密、中国/亚洲市场，来自 Finnhub 与 Google News 多源去重聚合。返回 data（按重要性排序的新闻簇，含 themes、scope、publisher_count、content_level、url）和 theme_digest（各主题热度与代表新闻）。只能作为市场背景线索，不是事实：themes 只表示话题，不表示利好利空；theme_digest 条数只反映话题热度，不反映多空方向；content_level=headline_only 时只能复述标题含义，不得补充细节；publisher_count 表示不同发布方数量，同一通讯社稿件被多家转载不等于独立证实。不得据此给出买卖建议或修改任何模型评分。无数据或来源失败时写“暂无市场新闻数据”，不得用记忆补写行情。同一对话只调用一次。",
 			InputSchema: `{"type":"object","properties":{"days":{"type":"integer","minimum":1,"maximum":7,"description":"回看天数，默认 2。"},"limit":{"type":"integer","minimum":1,"maximum":40,"description":"最多返回条数，默认 15。"},"theme":{"type":"string","enum":["monetary_policy","inflation_data","growth_jobs","trade_geopolitics","commodities","rates_fx","market_wrap","ai_tech","earnings_season","crypto","china_asia"],"description":"可选：只看某个主题。"}},"additionalProperties":false}`,
@@ -117,12 +145,23 @@ func financeTool(ctx context.Context, name, args string) providers.ToolOutput {
 	}
 
 	var p struct {
-		Symbol string   `json:"symbol"`
-		Peers  []string `json:"peers"`
-		Market string   `json:"market"`
-		Days   int      `json:"days"`
-		Limit  int      `json:"limit"`
-		Theme  string   `json:"theme"`
+		Symbol          string            `json:"symbol"`
+		Peers           []string          `json:"peers"`
+		Market          string            `json:"market"`
+		Days            int               `json:"days"`
+		Limit           int               `json:"limit"`
+		Theme           string            `json:"theme"`
+		PeerSymbols     string            `json:"peer_symbols"`
+		CoreSymbols     string            `json:"core_symbols"`
+		ExtraSymbols    string            `json:"extra_symbols"`
+		RelatedSymbols  string            `json:"related_symbols"`
+		SpecialSymbols  string            `json:"special_symbols"`
+		ExcludedSymbols string            `json:"excluded_symbols"`
+		PendingSymbols  string            `json:"pending_symbols"`
+		Status          string            `json:"status"`
+		UserConfirmed   bool              `json:"user_confirmed"`
+		Note            string            `json:"note"`
+		Evidence        map[string]string `json:"evidence"`
 	}
 	if strings.TrimSpace(args) != "" {
 		if err := json.Unmarshal([]byte(args), &p); err != nil {
@@ -133,19 +172,96 @@ func financeTool(ctx context.Context, name, args string) providers.ToolOutput {
 	var path string
 	timeout := 60 * time.Second
 	prefix := ""
+	method := http.MethodGet
+	var reqBody io.Reader
 
 	switch name {
-	case "finance_stock", "finance_technical", "finance_valuation", "finance_decision":
+	case "finance_stock", "finance_technical", "finance_valuation", "finance_decision", "finance_peer_compare", "finance_peer_group_save", "finance_peer_quant":
 		sym, ok := normalizeSymbol(p.Symbol)
 		if !ok {
 			return financeError("invalid stock symbol: %q", p.Symbol)
 		}
+		if name == "finance_peer_group_save" {
+			financeWarmReset(sym)
+		} else {
+			financeWarmEnsure(ctx, base, key, sym)
+		}
 		switch name {
 		case "finance_stock":
 			path = "/api/v1/openclaw/stock/" + url.PathEscape(sym)
+		case "finance_peer_group_save":
+			status := strings.TrimSpace(p.Status)
+			if status == "" {
+				status = "ai_proposed"
+			}
+			if status != "ai_proposed" && status != "approved" {
+				return financeError("invalid status %q (use ai_proposed or approved)", p.Status)
+			}
+			if status == "approved" && !p.UserConfirmed {
+				return financeError("status=approved requires user_confirmed=true, which is allowed only after the user explicitly confirmed this grouping in the chat")
+			}
+			groupBody := map[string]any{"status": status, "note": p.Note, "evidence": p.Evidence}
+			groupLists := map[string]string{"core": p.CoreSymbols, "related": p.RelatedSymbols, "special": p.SpecialSymbols,
+				"excluded": p.ExcludedSymbols, "pending": p.PendingSymbols}
+			for cls, raw := range groupLists {
+				cleaned := []string{}
+				for _, tok := range strings.Split(raw, ",") {
+					if strings.TrimSpace(tok) == "" {
+						continue
+					}
+					s2, ok2 := normalizeSymbol(strings.TrimSpace(tok))
+					if !ok2 {
+						return financeError("invalid symbol %q in %s", tok, cls)
+					}
+					cleaned = append(cleaned, s2)
+				}
+				groupBody[cls] = cleaned
+			}
+			groupJSON, merr := json.Marshal(groupBody)
+			if merr != nil {
+				return financeError("cannot encode grouping: %v", merr)
+			}
+			method = http.MethodPut
+			reqBody = strings.NewReader(string(groupJSON))
+			path = "/api/v1/peer-groups/" + url.PathEscape(sym)
+			timeout = 30 * time.Second
+		case "finance_peer_quant":
+			path = "/api/v1/peer-compare/" + url.PathEscape(sym) + "?layers=all&view=ai&require_review=true"
+			if strings.TrimSpace(p.PeerSymbols) != "" {
+				var cleanedPeers []string
+				for _, tok := range strings.Split(p.PeerSymbols, ",") {
+					s2, ok2 := normalizeSymbol(strings.TrimSpace(tok))
+					if !ok2 {
+						return financeError("invalid symbol %q in peer_symbols", tok)
+					}
+					cleanedPeers = append(cleanedPeers, s2)
+				}
+				path += "&peers=" + url.QueryEscape(strings.Join(cleanedPeers, ","))
+			}
+			timeout = 480 * time.Second
+		case "finance_peer_compare":
+			path = "/api/v1/peer-compare/" + url.PathEscape(sym)
+			timeout = 240 * time.Second
+			pq := url.Values{}
+			pq.Set("layers", "1")
+			for key, raw := range map[string]string{"peers": p.PeerSymbols, "core": p.CoreSymbols, "extra_symbols": p.ExtraSymbols} {
+				if strings.TrimSpace(raw) == "" {
+					continue
+				}
+				var cleaned []string
+				for _, tok := range strings.Split(raw, ",") {
+					s2, ok2 := normalizeSymbol(strings.TrimSpace(tok))
+					if !ok2 {
+						return financeError("invalid symbol %q in %s", tok, key)
+					}
+					cleaned = append(cleaned, s2)
+				}
+				pq.Set(key, strings.Join(cleaned, ","))
+			}
+			path += "?" + pq.Encode()
 		case "finance_decision":
 			path = "/api/v1/decision/" + url.PathEscape(sym)
-			timeout = 180 * time.Second
+			timeout = 240 * time.Second
 			if p.Market == "sp500" || p.Market == "nasdaq100" {
 				path += "?market=" + p.Market
 			}
@@ -181,6 +297,12 @@ func financeTool(ctx context.Context, name, args string) providers.ToolOutput {
 				path += "?peers=" + strings.Join(peers, ",")
 			}
 		}
+	case "finance_warmup_status":
+		sym, ok := normalizeSymbol(p.Symbol)
+		if !ok {
+			return financeError("invalid stock symbol: %q", p.Symbol)
+		}
+		path, timeout = "/api/v1/peer-warmup-status/"+url.PathEscape(sym), 15*time.Second
 	case "finance_market":
 		switch p.Market {
 		case "", "overview":
@@ -225,12 +347,15 @@ func financeTool(ctx context.Context, name, args string) providers.ToolOutput {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+path, nil)
+	req, err := http.NewRequestWithContext(ctx, method, base+path, reqBody)
 	if err != nil {
 		return financeError("%v", err)
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("X-API-Key", key)
+	if reqBody != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 
 	start := time.Now()
 	resp, err := financeHTTPClient.Do(req)
@@ -250,6 +375,10 @@ func financeTool(ctx context.Context, name, args string) providers.ToolOutput {
 	if err := json.Compact(&compact, body); err != nil {
 		return financeError("invalid JSON: %s", truncateRunes(string(body), 500))
 	}
+	if name == "finance_peer_quant" {
+		stashPeerTables(compact.Bytes())
+	}
+
 	switch name {
 	case "finance_quote":
 		return providers.ToolOutput{Content: formatFinanceQuote(compact.Bytes())}
