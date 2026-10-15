@@ -56,6 +56,7 @@ func toolCallsThisTurn(msgs []providers.SimpleMessage) (count int, warned bool) 
 // applyToolBudget appends a one-time instruction asking the model to finish
 // once the soft limit is reached.
 func applyToolBudget(p providers.RequestParams) providers.RequestParams {
+	p = applyDupBudget(p)
 	soft, _ := toolBudgetLimits()
 	n, warned := toolCallsThisTurn(p.Messages)
 	if n < soft || warned {

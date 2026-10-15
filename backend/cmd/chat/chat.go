@@ -225,6 +225,8 @@ func chatStream(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	responseMessage.Content = tools.FixPeerTables(responseMessage.Content)
+
 	responseMessage.Status = "completed"
 	responseMessage.Speed = streamStats.Speed
 	responseMessage.TokenCount = streamStats.CompletionTokens
@@ -395,6 +397,8 @@ func retryStream(w http.ResponseWriter, r *http.Request) {
 			streamStats = completion.Stats
 		}
 	}
+
+	responseMessage.Content = tools.FixPeerTables(responseMessage.Content)
 
 	responseMessage.Status = "completed"
 	responseMessage.Speed = streamStats.Speed

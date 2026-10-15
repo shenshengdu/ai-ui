@@ -285,6 +285,10 @@ func enterAgentLoop(
 			if providers.IsGenerationCancelled(responseMessage.ID) {
 				return
 			}
+			if note, dup := duplicateToolCall(providerParams.Messages, tc); dup {
+				executed[i].output = providers.ToolOutput{Content: note}
+				return
+			}
 			executed[i].output = executeMCPTool(providerParams.Context, tc, user, convID)
 		}(i, toolCall)
 	}

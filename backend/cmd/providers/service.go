@@ -9,7 +9,10 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Bajahaw/ai-ui/cmd/chatgptoauth"
@@ -302,6 +305,8 @@ func (c *ClientImpl) sendChatCompletionStreamOnce(params RequestParams, sc utils
 		defer idle.Stop()
 	}
 	stream := client.Chat.Completions.NewStreaming(ctx, openAIparams)
+	stopHB := startStreamHeartbeat(sc)
+	defer stopHB()
 	acc := openai.ChatCompletionAccumulator{}
 	uniqueToolIDs := make(map[string]string)
 	thoughtSignatures := make(map[string]string)
@@ -314,6 +319,7 @@ func (c *ClientImpl) sendChatCompletionStreamOnce(params RequestParams, sc utils
 
 	for stream.Next() {
 		idle.Touch()
+		stopHB()
 		chunk := stream.Current()
 		acc.AddChunk(chunk)
 
@@ -586,4 +592,36 @@ func estimatePromptText(messages []SimpleMessage) string {
 		}
 	}
 	return b.String()
+}
+
+// startStreamHeartbeat 在等待模型第一块数据期间，定时向页面发送空的 reasoning 帧作为心跳。
+// 返回的 stop 可重复调用；调用返回时心跳协程已退出，之后可安全写入同一个响应。
+func startStreamHeartbeat(sc utils.StreamClient) func() {
+	sec := 15
+	if v, err := strconv.Atoi(strings.TrimSpace(os.Getenv("AGENT_STREAM_HEARTBEAT_SEC"))); err == nil {
+		sec = v
+	}
+	if sec <= 0 {
+		return func() {}
+	}
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	var once sync.Once
+	go func() {
+		defer close(done)
+		t := time.NewTicker(time.Duration(sec) * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-t.C:
+				_ = utils.SendStreamChunk(sc, utils.StreamChunk{Type: utils.REASONING, Payload: ""})
+			}
+		}
+	}()
+	return func() {
+		once.Do(func() { close(stop) })
+		<-done
+	}
 }
