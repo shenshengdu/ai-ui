@@ -25,6 +25,9 @@ import (
 
 const financeMaxBody = 2 << 20 // 2 MiB read limit
 
+// 预热状态查询在平台忙时可能超时;此时不报错,告诉用户平台繁忙、预热通常仍在后台进行。
+const warmupBusyJSON = `{"state":"busy","message_zh":"平台正忙，没能及时返回预热进度。预热任务通常仍在后台继续，请几分钟后再问；不要连续重复查询，会加重平台负担。"}`
+
 var financeSymbolRe = regexp.MustCompile(`^[A-Z0-9.\-]{1,15}$`)
 
 var financeThemeRe = regexp.MustCompile(`^[a-z_]{1,32}$`)
@@ -302,7 +305,7 @@ func financeTool(ctx context.Context, name, args string) providers.ToolOutput {
 		if !ok {
 			return financeError("invalid stock symbol: %q", p.Symbol)
 		}
-		path, timeout = "/api/v1/peer-warmup-status/"+url.PathEscape(sym), 15*time.Second
+		path, timeout = "/api/v1/peer-warmup-status/"+url.PathEscape(sym), 30*time.Second
 	case "finance_market":
 		switch p.Market {
 		case "", "overview":
@@ -361,6 +364,9 @@ func financeTool(ctx context.Context, name, args string) providers.ToolOutput {
 	resp, err := financeHTTPClient.Do(req)
 	if err != nil {
 		log.Error("Finance Platform request failed", "tool", name, "path", path, "err", err)
+		if name == "finance_warmup_status" {
+			return providers.ToolOutput{Content: warmupBusyJSON}
+		}
 		return financeError("request failed: %v", err)
 	}
 	defer resp.Body.Close()
@@ -368,6 +374,9 @@ func financeTool(ctx context.Context, name, args string) providers.ToolOutput {
 	log.Info("Finance Platform request", "tool", name, "path", path, "status", resp.StatusCode,
 		"bytes", len(body), "duration", time.Since(start))
 
+	if name == "finance_warmup_status" && resp.StatusCode >= 500 {
+		return providers.ToolOutput{Content: warmupBusyJSON}
+	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return financeError("HTTP %d: %s", resp.StatusCode, truncateRunes(string(body), 500))
 	}
