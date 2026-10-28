@@ -54,15 +54,9 @@ export const updateSetting = async (
   value: string,
 ): Promise<void> => {
   try {
-    // Get current settings first to preserve other values
-    const currentSettings = await getSettings();
-    const updatedSettings: Settings = {
-      settings: {
-        ...currentSettings.settings,
-        [key]: value,
-      },
-    };
-    await updateSettings(updatedSettings);
+    // The backend upserts only the keys it receives, so send just this one.
+    // (Re-sending a full copy could overwrite a concurrent change with a stale value.)
+    await updateSettings({ settings: { [key]: value } });
   } catch (error) {
     console.error(`Failed to update setting ${key}:`, error);
     throw error;

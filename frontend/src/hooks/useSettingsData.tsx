@@ -31,11 +31,7 @@ import {
   getSecrets,
   saveSecret as saveSecretApi,
 } from "@/lib/api/secrets";
-import {
-  getSettings,
-  updateSetting,
-  updateSystemPrompt,
-} from "@/lib/api/settings";
+import { getSettings, updateSettings } from "@/lib/api/settings";
 import {
   FrontendProvider,
   MCPServerRequest,
@@ -372,15 +368,17 @@ export const SettingsDataProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const saveSettings = useCallback(async () => {
-    const updates = Object.entries(pendingSettings.current);
-    await Promise.all(
-      updates.map(([key, value]) =>
-        key === "systemPrompt"
-          ? updateSystemPrompt(value)
-          : updateSetting(key, value),
-      ),
-    );
-    pendingSettings.current = {};
+    const pending = { ...pendingSettings.current };
+    if (Object.keys(pending).length === 0) return;
+    // One request with only the changed keys. The backend upserts each key,
+    // so untouched settings stay as they are. (Saving keys in parallel via
+    // read-modify-write let a stale full copy overwrite a newer value.)
+    await updateSettings({ settings: pending });
+    for (const key of Object.keys(pending)) {
+      if (pendingSettings.current[key] === pending[key]) {
+        delete pendingSettings.current[key];
+      }
+    }
   }, []);
 
   return (
