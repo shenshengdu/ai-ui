@@ -16,6 +16,9 @@ func SetDefaults(user string) {
 		"reasoningEffort":            "disabled",
 		"attachmentOcrOnly":          "false",
 		"agenticDocumentRetrieval":   "false",
+		// Context budget (see chat/context_budget.go): 0 = send the whole branch
+		"contextMaxTurns":            "0",
+		"compactToolResults":         "true",
 		"ocrModel":                   "deepseek-ocr",
 		"imageModel":                 "dall-e-3",
 		// TTS read-aloud (OpenAI-compatible /audio/speech)

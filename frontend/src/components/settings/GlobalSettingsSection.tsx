@@ -34,6 +34,10 @@ export const GlobalSettingsSection = () => {
   const defaultModel = data.settings.defaultModel || "";
   const reasoningEffort = data.settings.reasoningEffort || "medium";
   const enterBehavior = data.settings.enterBehavior || "send";
+  const contextMaxTurns = data.settings.contextMaxTurns || "0";
+  // Backend treats anything but "false" as on (default on).
+  const compactToolResults =
+    data.settings.compactToolResults === "false" ? "false" : "true";
 
   const [local, setLocal] = useState({
     systemPrompt,
@@ -42,6 +46,8 @@ export const GlobalSettingsSection = () => {
     enterBehavior,
     appendDateToSystemPrompt: appendDate,
     appendPlatformInstructions: appendPlatform,
+    contextMaxTurns,
+    compactToolResults,
   });
 
   useEffect(() => {
@@ -52,6 +58,8 @@ export const GlobalSettingsSection = () => {
       enterBehavior,
       appendDateToSystemPrompt: appendDate,
       appendPlatformInstructions: appendPlatform,
+      contextMaxTurns,
+      compactToolResults,
     });
     setHasChanges(false);
   }, [
@@ -61,6 +69,8 @@ export const GlobalSettingsSection = () => {
     enterBehavior,
     appendDate,
     appendPlatform,
+    contextMaxTurns,
+    compactToolResults,
   ]);
 
   const handleChange = (key: string, value: string) => {
@@ -91,6 +101,8 @@ export const GlobalSettingsSection = () => {
       enterBehavior,
       appendDateToSystemPrompt: appendDate,
       appendPlatformInstructions: appendPlatform,
+      contextMaxTurns,
+      compactToolResults,
     });
     setHasChanges(false);
   };
@@ -170,6 +182,58 @@ export const GlobalSettingsSection = () => {
               <SelectItem value="newline">{t("general.enterNewline")}</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="space-y-3 border-b border-border pb-4">
+          <div className="flex justify-between items-center gap-4">
+            <div className="space-y-0.5 min-w-0">
+              <Label htmlFor="context-max-turns" className="text-nowrap">
+                {t("general.contextMaxTurns")}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {t("general.contextMaxTurnsDesc")}
+              </p>
+            </div>
+            <Select
+              value={local.contextMaxTurns}
+              onValueChange={(value) => handleChange("contextMaxTurns", value)}
+              disabled={isSaving}
+            >
+              <SelectTrigger
+                id="context-max-turns"
+                className="flex shrink-0 items-center justify-between gap-2 rounded-lg !border-none !bg-transparent transition-colors"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl min-w-[140px] border border-border/70 p-1 shadow-xl">
+                <SelectItem value="0">{t("general.contextUnlimited")}</SelectItem>
+                {["5", "10", "20", "40"].map((n) => (
+                  <SelectItem key={n} value={n}>
+                    {t("general.contextTurns", { count: n })}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-0.5 min-w-0">
+              <Label className="!mb-0">{t("general.compactTools")}</Label>
+              <p className="text-xs text-muted-foreground">
+                {t("general.compactToolsDesc")}
+              </p>
+            </div>
+            <Switch
+              className="mx-1 shrink-0"
+              checked={local.compactToolResults === "true"}
+              onCheckedChange={() =>
+                handleChange(
+                  "compactToolResults",
+                  local.compactToolResults === "true" ? "false" : "true",
+                )
+              }
+              disabled={isSaving}
+            />
+          </div>
         </div>
 
         <div className="space-y-4 pt-2">

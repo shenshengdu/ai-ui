@@ -421,6 +421,12 @@ export const en = {
   "authSettings.currentRequired": "Current password is required",
   "authSettings.changed": "Password changed successfully",
   "authSettings.changeFailed": "Failed to change password",
+  "general.contextMaxTurns": "Context length",
+  "general.contextMaxTurnsDesc": "Only the most recent turns are sent to the model. Fewer turns use fewer input tokens.",
+  "general.contextUnlimited": "Unlimited",
+  "general.contextTurns": "Last {count} turns",
+  "general.compactTools": "Compact old tool results",
+  "general.compactToolsDesc": "Shortens search / file results from earlier turns; the last 2 turns stay complete.",
 } as const;
 
 export type MessageKey = keyof typeof en;

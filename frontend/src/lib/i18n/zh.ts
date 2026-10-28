@@ -420,4 +420,10 @@ export const zh: Record<MessageKey, string> = {
   "authSettings.currentRequired": "请输入当前密码",
   "authSettings.changed": "密码修改成功",
   "authSettings.changeFailed": "修改密码失败",
+  "general.contextMaxTurns": "上下文长度",
+  "general.contextMaxTurnsDesc": "只把最近几轮对话发给模型，轮数越少输入 token 越省。",
+  "general.contextUnlimited": "不限制",
+  "general.contextTurns": "最近 {count} 轮",
+  "general.compactTools": "压缩旧的工具结果",
+  "general.compactToolsDesc": "把较早轮次的搜索、文件等工具结果截短，最近 2 轮保持完整。",
 };

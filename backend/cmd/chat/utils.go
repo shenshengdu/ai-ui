@@ -129,20 +129,40 @@ func buildContext(convID string, start int, user string) []providers.SimpleMessa
 		},
 	}
 
-	for i := len(path) - 1; i >= 0; i-- {
-		msg, ok := convMessages[path[i]]
+	// path is leaf→root; flip it, then apply the user's context budget.
+	ordered := make([]int, len(path))
+	for i, id := range path {
+		ordered[len(path)-1-i] = id
+	}
+	roleOf := func(id int) string {
+		if m, ok := convMessages[id]; ok {
+			return m.Role
+		}
+		return ""
+	}
+	budget := loadContextBudget(user)
+	ordered = trimPathToTurns(ordered, roleOf, budget.maxTurns)
+	turnAge := turnAgeFromEnd(ordered, roleOf)
+
+	for i, id := range ordered {
+		msg, ok := convMessages[id]
 		if !ok {
 			break
 		}
+		compactOld := budget.compactTools && turnAge[i] >= recentToolTurns
 
 		// If the assistant message has tool calls, include the text content on the
 		// first tool-call message so the model sees what it said before using tools.
 		// Then append each tool result. Skip the normal content append below.
 		if msg.Role == "assistant" && len(msg.Tools) > 0 {
 			for j, tool := range msg.Tools {
+				tc := *tool // copy: never mutate the stored tool call
+				if compactOld {
+					tc.Output = compactToolOutput(tc.Output)
+				}
 				assistantMsg := providers.SimpleMessage{
 					Role:     "assistant",
-					ToolCall: *tool,
+					ToolCall: tc,
 				}
 				// Attach the assistant's text to the first tool-call message
 				if j == 0 {
@@ -152,9 +172,14 @@ func buildContext(convID string, start int, user string) []providers.SimpleMessa
 
 				toolMsg := providers.SimpleMessage{
 					Role:     "tool",
-					ToolCall: *tool, // FileID stays an id
+					ToolCall: tc, // FileID stays an id
 				}
 				attachToolFile(&toolMsg, tool.FileID, user)
+				if compactOld {
+					// Keep the file reference text, skip re-sending its bytes.
+					toolMsg.Images = nil
+					toolMsg.Files = nil
+				}
 				messages = append(messages, toolMsg)
 			}
 			continue
