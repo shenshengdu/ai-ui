@@ -10,8 +10,8 @@ import {
   Children,
   forwardRef,
   useCallback,
-  useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -66,7 +66,7 @@ export const PromptInputTextarea = forwardRef<
       placeholder = "What would you like to know?",
       value,
       minHeight = 24,
-      maxHeight = 200,
+      maxHeight = 240,
       ...props
     },
     ref,
@@ -77,27 +77,21 @@ export const PromptInputTextarea = forwardRef<
     const { settings } = useSettings();
     const internalRef = useRef<HTMLTextAreaElement>(null);
 
+    // Size the textarea to its content in one step (no height animation:
+    // animating made the composer wobble on every new line).
     const adjustHeight = useCallback(() => {
       const el = internalRef.current;
       if (!el) return;
 
-      const currentHeight = el.getBoundingClientRect().height;
-
-      el.style.transition = "none";
       el.style.height = "auto";
       const scrollH = el.scrollHeight;
       const next = Math.min(Math.max(scrollH, minHeight), maxHeight);
-
-      el.style.height = `${currentHeight}px`;
-
-      void el.offsetHeight;
-
-      el.style.transition = "";
       el.style.height = `${next}px`;
       el.style.overflowY = scrollH > maxHeight ? "auto" : "hidden";
     }, [minHeight, maxHeight]);
 
-    useEffect(() => {
+    // Layout effect: measure before paint so there's no one-frame jump.
+    useLayoutEffect(() => {
       adjustHeight();
     }, [inputValue, adjustHeight]);
 
@@ -183,8 +177,9 @@ export const PromptInputTextarea = forwardRef<
         rows={1}
         ref={setRefs}
         className={cn(
-          "w-full resize-none rounded-none border-none px-5 pt-4 pb-1 text-base shadow-none outline-none ring-0 placeholder:text-muted-foreground/80",
-          "bg-transparent dark:bg-transparent overflow-hidden transition-[height] duration-150 ease-in-out",
+          // min-h-11 = exactly one line (16 + 24 + 4px) so every new line grows evenly
+          "w-full min-h-11 resize-none rounded-none border-none px-5 pt-4 pb-1 text-base shadow-none outline-none ring-0 placeholder:text-muted-foreground/80",
+          "bg-transparent dark:bg-transparent overflow-hidden",
           "focus-visible:ring-0",
           getTextDirection(inputValue),
           className,

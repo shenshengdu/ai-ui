@@ -1793,7 +1793,12 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
 
       <Conversation
         ref={conversationRef}
-        className={cn("relative", isEmpty ? "flex-1 md:flex-[1.15]" : "flex-1")}
+        className={cn(
+          "relative",
+          // Empty chat on desktop: fixed-height top area so the composer's top
+          // edge stays put and it grows downward while typing.
+          isEmpty ? "flex-1 md:h-[40%] md:flex-none" : "flex-1",
+        )}
       >
         {isEmpty ? (
           <div className="flex h-full flex-col items-center justify-center px-4 pb-6 md:justify-end md:pb-8">
