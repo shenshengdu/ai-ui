@@ -427,6 +427,17 @@ export const en = {
   "general.contextTurns": "Last {count} turns",
   "general.compactTools": "Compact old tool results",
   "general.compactToolsDesc": "Shortens search / file results from earlier turns; the last 2 turns stay complete.",
+  "general.newChatReminder": "Suggest a new chat",
+  "general.newChatReminderDesc": "After this many turns, offer to compress the chat into a summary and continue in a new one.",
+  "general.reminderOff": "Off",
+  "general.reminderAfter": "After {count} turns",
+  "compress.reminder": "This chat has {count} turns. A new chat saves tokens and keeps answers focused — you can carry this chat over as a short summary.",
+  "compress.action": "Compress & new chat",
+  "compress.working": "Compressing…",
+  "compress.newChatOnly": "New chat",
+  "compress.dismiss": "Not now",
+  "compress.failed": "Couldn't compress: {error}",
+  "compress.prefix": "Here is a summary of our previous conversation. Please continue from it:\n\n{summary}\n\n---\n\n",
 } as const;
 
 export type MessageKey = keyof typeof en;

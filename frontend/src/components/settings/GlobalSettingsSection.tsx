@@ -15,6 +15,12 @@ import {
 import { useSettingsData } from "@/hooks/useSettingsData";
 import { useI18n } from "@/lib/i18n";
 
+/** Preset options plus the saved value if it isn't one of them (keeps the Select from going blank). */
+const withCurrent = (presets: string[], current: string) =>
+  current === "0" || presets.includes(current)
+    ? presets
+    : [...presets, current].sort((a, b) => Number(a) - Number(b));
+
 export const GlobalSettingsSection = () => {
   const { t } = useI18n();
   const { data, models, updateSettingsLocal, saveSettings } = useSettingsData();
@@ -35,6 +41,7 @@ export const GlobalSettingsSection = () => {
   const reasoningEffort = data.settings.reasoningEffort || "medium";
   const enterBehavior = data.settings.enterBehavior || "send";
   const contextMaxTurns = data.settings.contextMaxTurns || "0";
+  const newChatReminderTurns = data.settings.newChatReminderTurns || "20";
   // Backend treats anything but "false" as on (default on).
   const compactToolResults =
     data.settings.compactToolResults === "false" ? "false" : "true";
@@ -48,6 +55,7 @@ export const GlobalSettingsSection = () => {
     appendPlatformInstructions: appendPlatform,
     contextMaxTurns,
     compactToolResults,
+    newChatReminderTurns,
   });
 
   useEffect(() => {
@@ -60,6 +68,7 @@ export const GlobalSettingsSection = () => {
       appendPlatformInstructions: appendPlatform,
       contextMaxTurns,
       compactToolResults,
+      newChatReminderTurns,
     });
     setHasChanges(false);
   }, [
@@ -71,6 +80,7 @@ export const GlobalSettingsSection = () => {
     appendPlatform,
     contextMaxTurns,
     compactToolResults,
+    newChatReminderTurns,
   ]);
 
   const handleChange = (key: string, value: string) => {
@@ -103,6 +113,7 @@ export const GlobalSettingsSection = () => {
       appendPlatformInstructions: appendPlatform,
       contextMaxTurns,
       compactToolResults,
+      newChatReminderTurns,
     });
     setHasChanges(false);
   };
@@ -207,9 +218,39 @@ export const GlobalSettingsSection = () => {
               </SelectTrigger>
               <SelectContent className="rounded-xl min-w-[140px] border border-border/70 p-1 shadow-xl">
                 <SelectItem value="0">{t("general.contextUnlimited")}</SelectItem>
-                {["5", "10", "20", "40"].map((n) => (
+                {withCurrent(["5", "10", "20", "40"], local.contextMaxTurns).map((n) => (
                   <SelectItem key={n} value={n}>
                     {t("general.contextTurns", { count: n })}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex justify-between items-center gap-4">
+            <div className="space-y-0.5 min-w-0">
+              <Label htmlFor="new-chat-reminder" className="text-nowrap">
+                {t("general.newChatReminder")}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {t("general.newChatReminderDesc")}
+              </p>
+            </div>
+            <Select
+              value={local.newChatReminderTurns}
+              onValueChange={(value) => handleChange("newChatReminderTurns", value)}
+              disabled={isSaving}
+            >
+              <SelectTrigger
+                id="new-chat-reminder"
+                className="flex shrink-0 items-center justify-between gap-2 rounded-lg !border-none !bg-transparent transition-colors"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl min-w-[140px] border border-border/70 p-1 shadow-xl">
+                <SelectItem value="0">{t("general.reminderOff")}</SelectItem>
+                {withCurrent(["5", "10", "15", "20", "30", "50"], local.newChatReminderTurns).map((n) => (
+                  <SelectItem key={n} value={n}>
+                    {t("general.reminderAfter", { count: n })}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -63,6 +63,8 @@ import {
   CodeIcon,
   ListChecksIcon,
   FileTextIcon,
+  ArchiveIcon,
+  Loader2Icon,
 } from "lucide-react";
 import { Loader } from "@/components/ai-elements/loader";
 import { Actions, Action } from "@/components/ai-elements/actions";
@@ -101,6 +103,7 @@ import {
   safeFilename,
 } from "@/lib/export-conversation";
 import { useI18n, type MessageKey } from "@/lib/i18n";
+import { chatAPI } from "@/lib/api/chat";
 
 // Dynamic models are now loaded from providers via useModels hook
 
@@ -1591,6 +1594,68 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
     );
   };
 
+  // ── "Long chat" reminder: suggest compressing into a new chat ──────────
+  const [reminderDismissed, setReminderDismissed] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [compressError, setCompressError] = useState<string | null>(null);
+
+  const reminderThreshold = useMemo(() => {
+    const raw = settingsData?.settings?.newChatReminderTurns;
+    const n = parseInt(raw ?? "20", 10);
+    return Number.isFinite(n) && n >= 0 ? n : 20;
+  }, [settingsData?.settings?.newChatReminderTurns]);
+
+  const userTurns = useMemo(
+    () => messages.filter((m) => m.role === "user").length,
+    [messages],
+  );
+
+  const showLongChatReminder =
+    !!currentConversation &&
+    reminderThreshold > 0 &&
+    userTurns >= reminderThreshold &&
+    !hasPendingMessages &&
+    !reminderDismissed.has(currentConversation.id);
+
+  useEffect(() => {
+    setCompressError(null);
+  }, [currentConversation?.id]);
+
+  const dismissReminder = useCallback(() => {
+    const id = currentConversation?.id;
+    if (!id) return;
+    setReminderDismissed((prev) => new Set(prev).add(id));
+  }, [currentConversation?.id]);
+
+  const handleCompressToNewChat = useCallback(async () => {
+    if (!currentConversation || isCompressing) return;
+    const leaf = [...messages].reverse().find((m) => /^\d+$/.test(m.id));
+    if (!leaf || !isModelValid) return;
+    setIsCompressing(true);
+    setCompressError(null);
+    try {
+      const { summary } = await chatAPI.summarizeConversation(
+        currentConversation.id,
+        parseInt(leaf.id, 10),
+        model,
+      );
+      onNewChat?.();
+      // Wait for the route change, then hand the summary to the composer.
+      window.setTimeout(() => {
+        promptAreaRef.current?.insertText(
+          t("compress.prefix", { summary: summary.trim() }),
+        );
+        promptAreaRef.current?.focus();
+      }, 200);
+    } catch (err) {
+      setCompressError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsCompressing(false);
+    }
+  }, [currentConversation, isCompressing, messages, isModelValid, model, onNewChat, t]);
+
   const isEmpty = messages.length === 0 && !isConversationLoading;
   const selectedModel = models.find((m) => m.id === model);
 
@@ -1780,6 +1845,61 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
         )}
         <ConversationScrollButton />
       </Conversation>
+
+      {showLongChatReminder && (
+        <div className="flex justify-center px-3 pb-2 sm:px-4">
+          <div className="chat-interface flex w-full max-w-3xl flex-col gap-3 rounded-2xl border border-border bg-muted/50 px-4 py-3 text-sm animate-slide-up sm:flex-row sm:items-center">
+            <div className="flex min-w-0 flex-1 items-start gap-2.5">
+              <ArchiveIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+              <div className="min-w-0">
+                <p className="text-foreground">
+                  {t("compress.reminder", { count: userTurns })}
+                </p>
+                {compressError && (
+                  <p className="mt-1 break-words text-xs text-destructive">
+                    {t("compress.failed", { error: compressError })}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 rounded-full px-3"
+                onClick={dismissReminder}
+                disabled={isCompressing}
+              >
+                {t("compress.dismiss")}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-full bg-background px-3 dark:bg-background"
+                onClick={() => onNewChat?.()}
+                disabled={isCompressing}
+              >
+                {t("compress.newChatOnly")}
+              </Button>
+              <Button
+                size="sm"
+                className="h-8 rounded-full px-3"
+                onClick={handleCompressToNewChat}
+                disabled={isCompressing || !isModelValid}
+              >
+                {isCompressing ? (
+                  <>
+                    <Loader2Icon className="size-3.5 animate-spin" />
+                    {t("compress.working")}
+                  </>
+                ) : (
+                  t("compress.action")
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <PromptArea
         ref={promptAreaRef}

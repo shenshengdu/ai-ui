@@ -19,6 +19,8 @@ func SetDefaults(user string) {
 		// Context budget (see chat/context_budget.go): 0 = send the whole branch
 		"contextMaxTurns":            "0",
 		"compactToolResults":         "true",
+		// Suggest "compress & start new chat" after this many user turns (0 = off)
+		"newChatReminderTurns":       "20",
 		"ocrModel":                   "deepseek-ocr",
 		"imageModel":                 "dall-e-3",
 		// TTS read-aloud (OpenAI-compatible /audio/speech)

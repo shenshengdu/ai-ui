@@ -156,6 +156,28 @@ export class ChatAPI {
     }, "updateMessage");
   }
 
+  /**
+   * Compress the branch ending at leafMessageId into a short summary
+   * (POST /api/chat/summarize). Nothing is saved to the conversation.
+   */
+  async summarizeConversation(
+    conversationId: string,
+    leafMessageId: number,
+    model: string,
+  ): Promise<{ summary: string; turns: number }> {
+    const response = await fetch("/api/chat/summarize", {
+      method: "POST",
+      headers: getHeaders({ "Content-Type": "application/json" }),
+      credentials: "include",
+      body: JSON.stringify({ conversationId, leafMessageId, model }),
+    });
+    if (!response.ok) {
+      const text = (await response.text()).trim();
+      throw new Error(text || `Summarize failed (${response.status})`);
+    }
+    return response.json();
+  }
+
   async cancelStream(messageId: number): Promise<Message> {
     if (!messageId) {
       throw new Error("Valid message ID is required");
