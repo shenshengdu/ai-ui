@@ -6,12 +6,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -24,6 +19,9 @@ import {
   ActivityIcon,
   ChevronsUpDownIcon,
   KeyboardIcon,
+  MonitorIcon,
+  MoonIcon,
+  SunIcon,
   LanguagesIcon,
   LogInIcon,
   LogOutIcon,
@@ -603,46 +601,30 @@ const AccountMenu = ({
           <SettingsIcon />
           {t("account.settings")}
         </DropdownMenuItem>
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <SunMoonIcon />
-            {t("account.theme")}
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="min-w-36">
-            <DropdownMenuRadioGroup
-              value={theme}
-              onValueChange={(v) => setTheme(v as Theme)}
-            >
-              <DropdownMenuRadioItem value="system">
-                {t("account.themeSystem")}
-              </DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="light">
-                {t("account.themeLight")}
-              </DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="dark">
-                {t("account.themeDark")}
-              </DropdownMenuRadioItem>
-            </DropdownMenuRadioGroup>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <LanguagesIcon />
-            {t("account.language")}
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="min-w-36">
-            <DropdownMenuRadioGroup
-              value={pref}
-              onValueChange={(v) => setPref(v as LanguagePref)}
-            >
-              <DropdownMenuRadioItem value="system">
-                {t("account.languageSystem")}
-              </DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="zh">简体中文</DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="en">English</DropdownMenuRadioItem>
-            </DropdownMenuRadioGroup>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
+        {/* Inline pickers instead of submenus: submenus overflow narrow screens. */}
+        <InlineSegment
+          icon={<SunMoonIcon />}
+          label={t("account.theme")}
+          value={theme}
+          onChange={(v) => setTheme(v as Theme)}
+          options={[
+            { value: "system", label: t("account.themeSystem"), icon: <MonitorIcon /> },
+            { value: "light", label: t("account.themeLight"), icon: <SunIcon /> },
+            { value: "dark", label: t("account.themeDark"), icon: <MoonIcon /> },
+          ]}
+        />
+        <InlineSegment
+          icon={<LanguagesIcon />}
+          label={t("account.language")}
+          value={pref}
+          onChange={(v) => setPref(v as LanguagePref)}
+          options={[
+            { value: "system", label: t("account.languageSystem") },
+            { value: "zh", label: "中文" },
+            { value: "en", label: "EN" },
+          ]}
+        />
+        <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => onOpenShortcuts?.()}>
           <KeyboardIcon />
           <span className="whitespace-nowrap">{t("account.shortcuts")}</span>
@@ -668,3 +650,49 @@ const AccountMenu = ({
     </DropdownMenu>
   );
 };
+
+/** A labelled row with a segmented control, rendered inside a dropdown menu. */
+const InlineSegment = ({
+  icon,
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  options: { value: string; label: string; icon?: ReactNode }[];
+  onChange: (value: string) => void;
+}) => (
+  <div className="px-2.5 py-1.5" role="group" aria-label={label}>
+    <div className="mb-1.5 flex items-center gap-2.5 text-sm text-foreground [&_svg]:size-4 [&_svg]:text-muted-foreground">
+      {icon}
+      {label}
+    </div>
+    <div className="grid auto-cols-fr grid-flow-col gap-0.5 rounded-lg bg-accent/70 p-0.5">
+      {options.map((opt) => {
+        const active = opt.value === value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => onChange(opt.value)}
+            onKeyDown={(e) => e.stopPropagation()}
+            className={cn(
+              "flex h-7 min-w-0 items-center justify-center gap-1 rounded-md px-1.5 text-xs whitespace-nowrap transition-colors [&_svg]:size-3.5",
+              active
+                ? "bg-background font-medium text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {opt.icon}
+            <span className="truncate">{opt.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  </div>
+);
