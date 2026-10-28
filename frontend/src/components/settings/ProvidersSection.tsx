@@ -19,6 +19,13 @@ import { useModelsContext } from "@/hooks/useModelsContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useI18n } from "@/lib/i18n";
 
+/**
+ * "Add ChatGPT" (connect a ChatGPT account via OAuth) is hidden for now.
+ * Existing ChatGPT providers still show and keep working; flip to true to
+ * bring the buttons back.
+ */
+const ENABLE_CHATGPT_CONNECT = false;
+
 export const ProvidersSection = () => {
   const { t } = useI18n();
   const {
@@ -128,6 +135,7 @@ export const ProvidersSection = () => {
               <RefreshCw className="h-4 w-4" />
             )}
           </Button>
+          {ENABLE_CHATGPT_CONNECT && (
           <Button
             onClick={handleConnectChatGPT}
             variant="outline"
@@ -142,6 +150,7 @@ export const ProvidersSection = () => {
             )}
             <span className="hidden sm:inline">{t("providers.addChatGPT")}</span>
           </Button>
+          )}
           <Button
             onClick={() => setShowAddForm(true)}
             variant="outline"
@@ -158,6 +167,7 @@ export const ProvidersSection = () => {
           <div className="space-y-3">
             <p className="text-muted-foreground">{t("providers.empty")}</p>
             <div className="flex flex-wrap items-center justify-center gap-2">
+              {ENABLE_CHATGPT_CONNECT && (
               <Button
                 onClick={handleConnectChatGPT}
                 variant="default"
@@ -171,9 +181,10 @@ export const ProvidersSection = () => {
                 )}
                 {t("providers.addChatGPT")}
               </Button>
+              )}
               <Button
                 onClick={() => setShowAddForm(true)}
-                variant="outline"
+                variant={ENABLE_CHATGPT_CONNECT ? "outline" : "default"}
                 size="sm"
               >
                 <Plus className="h-4 w-4" />
