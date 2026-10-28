@@ -437,4 +437,7 @@ export const zh: Record<MessageKey, string> = {
   "compress.dismiss": "暂不",
   "compress.failed": "压缩失败：{error}",
   "compress.prefix": "以下是我们之前对话的摘要，请在此基础上继续：\n\n{summary}\n\n---\n\n",
+  "general.summaryMaxTokens": "摘要长度上限",
+  "general.summaryMaxTokensDesc": "「压缩并开新对话」生成摘要的最大长度。越短越省 token，但保留的细节越少。",
+  "general.summaryTokens": "{count} tokens",
 };

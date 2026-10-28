@@ -438,6 +438,9 @@ export const en = {
   "compress.dismiss": "Not now",
   "compress.failed": "Couldn't compress: {error}",
   "compress.prefix": "Here is a summary of our previous conversation. Please continue from it:\n\n{summary}\n\n---\n\n",
+  "general.summaryMaxTokens": "Summary length limit",
+  "general.summaryMaxTokensDesc": "Maximum length of the summary made by “Compress & new chat”. Shorter saves tokens but keeps fewer details.",
+  "general.summaryTokens": "{count} tokens",
 } as const;
 
 export type MessageKey = keyof typeof en;

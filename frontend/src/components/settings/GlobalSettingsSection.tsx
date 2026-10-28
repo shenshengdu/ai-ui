@@ -42,6 +42,7 @@ export const GlobalSettingsSection = () => {
   const enterBehavior = data.settings.enterBehavior || "send";
   const contextMaxTurns = data.settings.contextMaxTurns || "0";
   const newChatReminderTurns = data.settings.newChatReminderTurns || "20";
+  const summaryMaxTokens = data.settings.summaryMaxTokens || "800";
   // Backend treats anything but "false" as on (default on).
   const compactToolResults =
     data.settings.compactToolResults === "false" ? "false" : "true";
@@ -56,6 +57,7 @@ export const GlobalSettingsSection = () => {
     contextMaxTurns,
     compactToolResults,
     newChatReminderTurns,
+    summaryMaxTokens,
   });
 
   useEffect(() => {
@@ -69,6 +71,7 @@ export const GlobalSettingsSection = () => {
       contextMaxTurns,
       compactToolResults,
       newChatReminderTurns,
+      summaryMaxTokens,
     });
     setHasChanges(false);
   }, [
@@ -81,6 +84,7 @@ export const GlobalSettingsSection = () => {
     contextMaxTurns,
     compactToolResults,
     newChatReminderTurns,
+    summaryMaxTokens,
   ]);
 
   const handleChange = (key: string, value: string) => {
@@ -114,6 +118,7 @@ export const GlobalSettingsSection = () => {
       contextMaxTurns,
       compactToolResults,
       newChatReminderTurns,
+      summaryMaxTokens,
     });
     setHasChanges(false);
   };
@@ -251,6 +256,35 @@ export const GlobalSettingsSection = () => {
                 {withCurrent(["5", "10", "15", "20", "30", "50"], local.newChatReminderTurns).map((n) => (
                   <SelectItem key={n} value={n}>
                     {t("general.reminderAfter", { count: n })}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex justify-between items-center gap-4">
+            <div className="space-y-0.5 min-w-0">
+              <Label htmlFor="summary-max-tokens" className="text-nowrap">
+                {t("general.summaryMaxTokens")}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {t("general.summaryMaxTokensDesc")}
+              </p>
+            </div>
+            <Select
+              value={local.summaryMaxTokens}
+              onValueChange={(value) => handleChange("summaryMaxTokens", value)}
+              disabled={isSaving}
+            >
+              <SelectTrigger
+                id="summary-max-tokens"
+                className="flex shrink-0 items-center justify-between gap-2 rounded-lg !border-none !bg-transparent transition-colors"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl min-w-[140px] border border-border/70 p-1 shadow-xl">
+                {withCurrent(["300", "500", "800", "1200", "2000"], local.summaryMaxTokens).map((n) => (
+                  <SelectItem key={n} value={n}>
+                    {t("general.summaryTokens", { count: n })}
                   </SelectItem>
                 ))}
               </SelectContent>

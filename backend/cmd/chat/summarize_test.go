@@ -33,3 +33,27 @@ func TestBuildSummaryTranscript(t *testing.T) {
 		t.Fatal("transcript must be oldest first")
 	}
 }
+
+func TestEstimateTokens(t *testing.T) {
+	if got := estimateTokens("成都天气"); got != 4 {
+		t.Fatalf("cjk: got %d", got)
+	}
+	if got := estimateTokens("abcdefgh"); got != 2 {
+		t.Fatalf("latin: got %d", got)
+	}
+}
+
+func TestClampSummary(t *testing.T) {
+	short := "line one\nline two"
+	if clampSummary(short, 100) != short {
+		t.Fatal("short summary must be unchanged")
+	}
+	long := strings.Repeat("天气很好适合出行\n", 50) // 9 tokens per line
+	got := clampSummary(long, 40)
+	if estimateTokens(got) > 45 {
+		t.Fatalf("not clamped: %d tokens", estimateTokens(got))
+	}
+	if !strings.HasSuffix(got, "…") {
+		t.Fatal("clamped summary should end with an ellipsis")
+	}
+}

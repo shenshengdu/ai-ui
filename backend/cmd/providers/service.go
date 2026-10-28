@@ -89,6 +89,9 @@ type RequestParams struct {
 	// Cancelled by CancelStream / EndGeneration.
 	Context context.Context
 	Tools   []openai.ChatCompletionToolUnionParam
+	// MaxOutputTokens caps the response length when > 0 (OpenAI-compatible
+	// and Anthropic providers; ignored by the ChatGPT account bridge).
+	MaxOutputTokens int
 }
 
 type ChatCompletionMessage struct {
@@ -164,6 +167,10 @@ func (c *ClientImpl) SendChatCompletionRequest(params RequestParams) (*ChatCompl
 	if providerRejectsFileParts(provider.BaseURL) {
 		inlineFileParts(&openAIparams)
 		adaptDeepSeekParams(&openAIparams, provider.BaseURL)
+	}
+
+	if params.MaxOutputTokens > 0 {
+		openAIparams.MaxCompletionTokens = openai.Int(int64(params.MaxOutputTokens))
 	}
 
 	log.Debug("Params ReasoningEffort:", "value", params.ReasoningEffort)

@@ -56,6 +56,9 @@ func anthropicMessages(params RequestParams, model string, stream bool) anthropi
 		Messages:  make([]anthropicMessage, 0),
 		Stream:    stream,
 	}
+	if params.MaxOutputTokens > 0 {
+		req.MaxTokens = params.MaxOutputTokens
+	}
 
 	for _, msg := range params.Messages {
 		if msg.Role == "system" {

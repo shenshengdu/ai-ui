@@ -3,7 +3,9 @@ package chat
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/Bajahaw/ai-ui/cmd/providers"
 	"github.com/Bajahaw/ai-ui/cmd/utils"
@@ -30,7 +32,69 @@ type SummarizeResponse struct {
 const (
 	summaryToolOutputRunes = 300     // per tool result, in the transcript
 	summaryTranscriptRunes = 120_000 // transcript cap; the newest part is kept
+
+	// summaryMaxTokens setting (Settings → General). The model is asked to
+	// stay under it; the request's output cap adds headroom because reasoning
+	// models spend part of the budget thinking.
+	defaultSummaryMaxTokens  = 800
+	minSummaryMaxTokens      = 200
+	maxSummaryMaxTokens      = 4000
+	summaryReasoningHeadroom = 1024
 )
+
+func summaryTokenLimit(user string) int {
+	v, err := settings.Get("summaryMaxTokens", user)
+	if err != nil {
+		return defaultSummaryMaxTokens
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil || n <= 0 {
+		return defaultSummaryMaxTokens
+	}
+	return min(max(n, minSummaryMaxTokens), maxSummaryMaxTokens)
+}
+
+// estimateTokens is a rough count: one token per CJK character, about four
+// characters per token for everything else.
+func estimateTokens(s string) int {
+	cjk, other := 0, 0
+	for _, r := range s {
+		if unicode.Is(unicode.Han, r) || unicode.Is(unicode.Hiragana, r) ||
+			unicode.Is(unicode.Katakana, r) || unicode.Is(unicode.Hangul, r) {
+			cjk++
+		} else {
+			other++
+		}
+	}
+	return cjk + (other+3)/4
+}
+
+// clampSummary trims a summary that overshoots the limit, cutting at the last
+// line break that fits so the result doesn't end mid-sentence.
+func clampSummary(s string, limit int) string {
+	if estimateTokens(s) <= limit {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	var out []string
+	used := 0
+	for _, line := range lines {
+		t := estimateTokens(line) + 1
+		if used+t > limit {
+			break
+		}
+		out = append(out, line)
+		used += t
+	}
+	if len(out) == 0 { // a single huge line: hard cut by runes
+		r := []rune(s)
+		if len(r) > limit {
+			r = r[:limit]
+		}
+		return strings.TrimSpace(string(r)) + "…"
+	}
+	return strings.TrimSpace(strings.Join(out, "\n")) + "\n…"
+}
 
 const summarizeInstruction = `You compress a chat history so the user can continue it in a NEW conversation without losing important context.
 
@@ -43,7 +107,7 @@ Rules:
   2. Key facts and conclusions
   3. Decisions and preferences
   4. Open items / next steps
-- Aim for under 400 words. Output only the summary, no preamble.`
+- Output only the summary, no preamble.`
 
 func summarizeConversation(w http.ResponseWriter, r *http.Request) {
 	user := utils.ExtractContextUser(r)
@@ -68,13 +132,20 @@ func summarizeConversation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	limit := summaryTokenLimit(user)
+	instruction := summarizeInstruction + fmt.Sprintf(
+		"\n- Hard length limit: at most %d tokens (about %d Chinese characters or %d English words). Prioritise the most important points if space is short.",
+		limit, limit*9/10, limit*3/4,
+	)
+
 	resp, err := provider.SendChatCompletionRequest(providers.RequestParams{
 		Messages: []providers.SimpleMessage{
-			{Role: "system", Content: summarizeInstruction},
+			{Role: "system", Content: instruction},
 			{Role: "user", Content: "<conversation>\n" + transcript + "\n</conversation>"},
 		},
-		Model: req.Model,
-		User:  user,
+		Model:           req.Model,
+		User:            user,
+		MaxOutputTokens: limit + summaryReasoningHeadroom,
 	})
 	if err != nil {
 		log.Error("Error summarizing conversation", "err", err)
@@ -83,9 +154,10 @@ func summarizeConversation(w http.ResponseWriter, r *http.Request) {
 	}
 	summary := strings.TrimSpace(resp.Content)
 	if summary == "" {
-		http.Error(w, "Summarize failed: empty response", http.StatusBadGateway)
+		http.Error(w, "Summarize failed: the model returned no text (the length limit may be too low for this model; raise it in Settings → General)", http.StatusBadGateway)
 		return
 	}
+	summary = clampSummary(summary, limit)
 
 	utils.RespondWithJSON(w, SummarizeResponse{Summary: summary, Turns: turns}, http.StatusOK)
 }

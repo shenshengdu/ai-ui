@@ -21,6 +21,8 @@ func SetDefaults(user string) {
 		"compactToolResults":         "true",
 		// Suggest "compress & start new chat" after this many user turns (0 = off)
 		"newChatReminderTurns":       "20",
+		// Length limit for "compress & new chat" summaries, in tokens
+		"summaryMaxTokens":           "800",
 		"ocrModel":                   "deepseek-ocr",
 		"imageModel":                 "dall-e-3",
 		// TTS read-aloud (OpenAI-compatible /audio/speech)
