@@ -16,6 +16,7 @@ import {
 } from "react";
 import { Action } from "./actions";
 import { useCopyFeedback } from "./diagram-actions";
+import { useI18n } from "@/lib/i18n";
 
 type WidgetRendererProps = HTMLAttributes<HTMLDivElement> & {
   code: unknown;
@@ -192,6 +193,7 @@ export function WidgetRenderer({
   className,
   ...props
 }: WidgetRendererProps) {
+  const { t } = useI18n();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const lastHeight = useRef(60);
   const [iframeHeight, setIframeHeight] = useState(60);
@@ -305,8 +307,8 @@ export function WidgetRenderer({
           size="icon"
           onClick={copyRawCode}
           disabled={!normalizedCode || isCopying}
-          label="Copy widget code"
-          tooltip="Copy code"
+          label={t("diagram.copyWidget")}
+          tooltip={t("diagram.copyWidget")}
         >
           {isCopied ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
         </Action>
@@ -315,8 +317,8 @@ export function WidgetRenderer({
           size="icon"
           onClick={saveAsPdf}
           disabled={!srcdoc}
-          label="Save as PDF"
-          tooltip="Save as PDF"
+          label={t("diagram.savePdf")}
+          tooltip={t("diagram.savePdf")}
         >
           <FileDownIcon size={14} />
         </Action>
@@ -325,8 +327,8 @@ export function WidgetRenderer({
           size="icon"
           onClick={openInNewTab}
           disabled={!srcdoc}
-          label="Open in new tab"
-          tooltip="Open in new tab"
+          label={t("diagram.openNewTab")}
+          tooltip={t("diagram.openNewTab")}
         >
           <ExternalLinkIcon size={14} />
         </Action>

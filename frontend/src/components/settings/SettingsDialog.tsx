@@ -31,6 +31,7 @@ import { AuthSection } from "./AuthSection";
 import { SkillsSection } from "./SkillsSection";
 import { SecretsSection } from "./SecretsSection";
 import { useSettingsData } from "@/hooks/useSettingsData";
+import { useI18n } from "@/lib/i18n";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -50,6 +51,7 @@ type SettingsTab =
   | "auth";
 
 const SettingsDialogContent = () => {
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<SettingsTab>("global");
   const { loaded, loading, fetchAll } = useSettingsData();
 
@@ -62,53 +64,53 @@ const SettingsDialogContent = () => {
   const tabs = [
     {
       id: "global" as const,
-      label: "General",
+      label: t("settings.tab.general"),
       icon: Settings,
     },
     {
       id: "providers" as const,
-      label: "Providers",
+      label: t("settings.tab.providers"),
       icon: Database,
     },
 
     {
       id: "models" as const,
-      label: "Models",
+      label: t("settings.tab.models"),
       icon: ListChecks,
     },
     {
       id: "mcp" as const,
-      label: "MCP Servers",
+      label: t("settings.tab.mcp"),
       icon: Server,
     },
     {
       id: "tools" as const,
-      label: "Tools",
+      label: t("settings.tab.tools"),
       icon: Wrench,
     },
     {
       id: "skills" as const,
-      label: "Skills",
+      label: t("settings.tab.skills"),
       icon: BookOpen,
     },
     {
       id: "secrets" as const,
-      label: "Secrets",
+      label: t("settings.tab.secrets"),
       icon: KeyRound,
     },
     {
       id: "documents" as const,
-      label: "Documents",
+      label: t("settings.tab.documents"),
       icon: FileText,
     },
     {
       id: "media" as const,
-      label: "Media",
+      label: t("settings.tab.media"),
       icon: ImageIcon,
     },
     {
       id: "auth" as const,
-      label: "Account",
+      label: t("settings.tab.account"),
       icon: Lock,
     },
   ];
@@ -145,7 +147,7 @@ const SettingsDialogContent = () => {
       <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
         <DialogTitle className="flex items-center gap-2">
           <Settings className="h-5 w-5" />
-          Settings
+          {t("settings.title")}
         </DialogTitle>
       </DialogHeader>
 
@@ -153,7 +155,7 @@ const SettingsDialogContent = () => {
         <div className="flex-1 flex items-center justify-center">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
-            <span>Loading settings...</span>
+            <span>{t("settings.loading")}</span>
           </div>
         </div>
       ) : (

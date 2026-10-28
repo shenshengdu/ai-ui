@@ -4,6 +4,7 @@ import App from "./App.tsx";
 import "./globals.css";
 import { ThemeProvider } from "./components/theme-provider.tsx";
 import { AuthProvider } from "./hooks/useAuth.tsx";
+import { I18nProvider } from "./lib/i18n";
 import { ModelsProvider } from "./hooks/useModelsContext.tsx";
 import { SettingsDataProvider } from "./hooks/useSettingsData.tsx";
 import { ChatGPTOAuthWaitingDialog } from "./components/auth/ChatGPTOAuthWaitingDialog.tsx";
@@ -71,6 +72,7 @@ const isDevelopment = (import.meta as any).env.DEV;
 // Conditionally wrap with StrictMode - disable in dev to prevent duplicate messages
 // AuthProvider must be outermost so auth state is available to guard components
 const AppTree = (
+  <I18nProvider>
   <AuthProvider>
     <ThemeProvider defaultTheme="system" storageKey="ai-ui-theme">
       <ChatGPTOAuthWaitingDialog />
@@ -89,6 +91,7 @@ const AppTree = (
       </AuthGuard>
     </ThemeProvider>
   </AuthProvider>
+  </I18nProvider>
 );
 
 const AppWrapper = isDevelopment ? (

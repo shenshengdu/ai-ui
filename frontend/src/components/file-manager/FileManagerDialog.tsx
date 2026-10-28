@@ -38,6 +38,7 @@ import {
   readClipboardImageFiles,
 } from "@/lib/clipboard";
 import { FileThumb } from "@/components/ui/file-thumb";
+import { useI18n } from "@/lib/i18n";
 
 
 interface FileManagerDialogProps {
@@ -51,6 +52,7 @@ export function FileManagerDialog({
   onOpenChange,
   onAttach,
 }: FileManagerDialogProps) {
+  const { t } = useI18n();
   const [files, setFiles] = useState<ApiFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -212,8 +214,8 @@ export function FileManagerDialog({
     const count = idsToDelete.length;
     const confirmMsg =
       count === 1
-        ? "⚠️ Warning\n\nDeleting files from the library will remove them from chats as well. Are you sure you want to delete this file?"
-        : `⚠️ Warning\n\nDeleting files from the library will remove them from chats as well. Are you sure you want to delete these ${count} files?`;
+        ? t("library.confirmDeleteOne")
+        : t("library.confirmDeleteMany", { count });
 
     if (!window.confirm(confirmMsg)) return;
 
@@ -290,7 +292,7 @@ export function FileManagerDialog({
         <DialogHeader className="px-6 py-4 border-b shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Paperclip className="h-5 w-5" />
-            File Library
+            {t("library.title")}
           </DialogTitle>
         </DialogHeader>
 
@@ -298,7 +300,7 @@ export function FileManagerDialog({
           <div className="relative flex-1">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search files..."
+              placeholder={t("library.search")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9 bg-background focus-visible:ring-1"
@@ -323,7 +325,7 @@ export function FileManagerDialog({
               size="icon"
               onClick={handleOCR}
               disabled={selectedFileIds.size === 0 || extracting}
-              title="Trigger OCR"
+              title={t("library.ocr")}
               className="h-9 w-9"
             >
               {extracting ? (
@@ -337,7 +339,7 @@ export function FileManagerDialog({
               size="icon"
               onClick={handleDownload}
               disabled={selectedFileIds.size === 0}
-              title="Download files"
+              title={t("library.download")}
               className="h-9 w-9"
             >
               <Download className="h-4 w-4" />
@@ -347,7 +349,7 @@ export function FileManagerDialog({
               size="icon"
               onClick={handleDelete}
               disabled={selectedFileIds.size === 0 || deleting}
-              title="Delete files"
+              title={t("library.delete")}
               className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/5"
             >
               {deleting ? (
@@ -367,7 +369,7 @@ export function FileManagerDialog({
           ) : filteredFiles.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full min-h-50 text-muted-foreground gap-2">
               <FileIcon className="h-12 w-12 opacity-20" />
-              <p>No files found</p>
+              <p>{t("library.empty")}</p>
             </div>
           ) : (
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
@@ -439,15 +441,14 @@ export function FileManagerDialog({
 
           <div className="flex items-center justify-between w-full">
             <div className="text-sm text-muted-foreground">
-              {selectedFileIds.size} file{selectedFileIds.size !== 1 ? "s" : ""}{" "}
-              selected
+              {t("library.selected", { count: selectedFileIds.size })}
             </div>
             <div className="flex gap-2 items-center">
               <Button
                 variant="outline"
                 // size="icon"
                 onClick={() => fileInputRef.current?.click()}
-                title="Upload"
+                title={t("library.upload")}
                 className="h-9"
                 disabled={uploading}
               >
@@ -456,14 +457,14 @@ export function FileManagerDialog({
                 ) : (
                   <Upload className="h-4 w-4" />
                 )}
-                Upload
+                {t("library.upload")}
               </Button>
 
               <Button
                 onClick={handleAttach}
                 disabled={selectedFileIds.size === 0 || deleting}
               >
-                Attach Selected
+                {t("library.attach")}
               </Button>
             </div>
           </div>

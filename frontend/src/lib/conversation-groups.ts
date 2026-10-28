@@ -1,4 +1,5 @@
 import type { ClientConversation } from "@/lib/clientConversationManager";
+import type { TFunction } from "@/lib/i18n";
 
 /** Last-activity timestamp (ms) of a conversation, 0 when unknown. */
 export const conversationUpdatedAt = (c: ClientConversation): number => {
@@ -15,6 +16,8 @@ export const conversationUpdatedAt = (c: ClientConversation): number => {
  */
 export const conversationGroupLabel = (
   updatedAt: number,
+  t: TFunction,
+  locale: string,
   now: Date = new Date(),
 ): string => {
   const startOfToday = new Date(
@@ -24,26 +27,28 @@ export const conversationGroupLabel = (
   ).getTime();
   const DAY = 86_400_000;
 
-  if (updatedAt >= startOfToday) return "Today";
-  if (updatedAt >= startOfToday - DAY) return "Yesterday";
-  if (updatedAt >= startOfToday - 7 * DAY) return "Previous 7 Days";
-  if (updatedAt >= startOfToday - 30 * DAY) return "Previous 30 Days";
+  if (updatedAt >= startOfToday) return t("groups.today");
+  if (updatedAt >= startOfToday - DAY) return t("groups.yesterday");
+  if (updatedAt >= startOfToday - 7 * DAY) return t("groups.previous7");
+  if (updatedAt >= startOfToday - 30 * DAY) return t("groups.previous30");
 
   const d = new Date(updatedAt);
   return d.getFullYear() === now.getFullYear()
-    ? d.toLocaleString("en-US", { month: "long" })
-    : d.toLocaleString("en-US", { month: "long", year: "numeric" });
+    ? d.toLocaleString(locale, { month: "long" })
+    : d.toLocaleString(locale, { month: "long", year: "numeric" });
 };
 
 /** Group conversations (already sorted newest-first) preserving order. */
 export function groupConversations<T extends ClientConversation>(
   conversations: T[],
+  t: TFunction,
+  locale: string,
 ): { label: string; items: T[] }[] {
   const now = new Date();
   const groups: { label: string; items: T[] }[] = [];
   const index = new Map<string, number>();
   for (const c of conversations) {
-    const label = conversationGroupLabel(conversationUpdatedAt(c), now);
+    const label = conversationGroupLabel(conversationUpdatedAt(c), t, locale, now);
     let i = index.get(label);
     if (i === undefined) {
       i = groups.length;

@@ -24,6 +24,7 @@ import {
   ActivityIcon,
   ChevronsUpDownIcon,
   KeyboardIcon,
+  LanguagesIcon,
   LogInIcon,
   LogOutIcon,
   MoreHorizontalIcon,
@@ -57,6 +58,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { groupConversations } from "@/lib/conversation-groups";
 import { modKeyLabel, shiftKeyLabel } from "@/lib/platform";
 import { useTheme, type Theme } from "@/components/theme-provider";
+import { useI18n, type LanguagePref } from "@/lib/i18n";
 
 export interface ConversationSidebarProps extends ComponentProps<"div"> {
   conversations?: ClientConversation[];
@@ -146,6 +148,7 @@ export const ConversationSidebar = ({
 }: ConversationSidebarProps) => {
   const { isAuthenticated, isCheckingAuth } = useAuth();
   const { pinned, togglePin } = usePinnedConversations();
+  const { t, locale } = useI18n();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState<string>("");
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
@@ -160,7 +163,7 @@ export const ConversationSidebar = ({
       .map((id) => byId.get(id))
       .filter((c): c is ClientConversation => !!c);
     if (pinnedConvs.length > 0) {
-      items.push({ type: "header", id: "header-pinned", label: "Pinned" });
+      items.push({ type: "header", id: "header-pinned", label: t("sidebar.pinned") });
       for (const c of pinnedConvs) {
         items.push({ type: "item", id: c.id, data: c, pinned: true });
       }
@@ -168,7 +171,7 @@ export const ConversationSidebar = ({
 
     // Manager already keeps sidebar order (newest first).
     const rest = conversations.filter((c) => !pinnedSet.has(c.id));
-    for (const group of groupConversations(rest)) {
+    for (const group of groupConversations(rest, t, locale)) {
       items.push({
         type: "header",
         id: `header-${group.label}`,
@@ -179,7 +182,7 @@ export const ConversationSidebar = ({
       }
     }
     return items;
-  }, [conversations, pinned]);
+  }, [conversations, pinned, t, locale]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const flatItemsRef = useRef(flatItems);
@@ -224,7 +227,7 @@ export const ConversationSidebar = ({
   return (
     <aside
       className={cn("sidebar", isCollapsed && "collapsed", className)}
-      aria-label="Chat history"
+      aria-label={t("sidebar.label")}
       {...props}
     >
       {isCollapsed ? (
@@ -233,13 +236,13 @@ export const ConversationSidebar = ({
           <RailButton
             label={
               <span className="flex items-center gap-2">
-                Open sidebar
+                {t("sidebar.openSidebar")}
                 <Kbd keys={[modKeyLabel, shiftKeyLabel, "S"]} />
               </span>
             }
             onClick={onToggleCollapse}
             className="group/logo size-9 rounded-lg hover:bg-sidebar-accent dark:hover:bg-sidebar-accent"
-            aria-label="Open sidebar"
+            aria-label={t("sidebar.openSidebar")}
           >
             <img
               src="/favicon.svg"
@@ -250,18 +253,18 @@ export const ConversationSidebar = ({
           </RailButton>
           <div className="h-2" />
           <RailButton
-            label="New chat"
+            label={t("sidebar.newChat")}
             onClick={onNewChat}
             disabled={!canChat}
-            aria-label="New chat"
+            aria-label={t("sidebar.newChat")}
           >
             <SquarePenIcon className="size-[18px]" />
           </RailButton>
           <RailButton
-            label="Search chats"
+            label={t("sidebar.searchChats")}
             onClick={onOpenSearch}
             disabled={!canChat}
-            aria-label="Search chats"
+            aria-label={t("sidebar.searchChats")}
           >
             <SearchIcon className="size-[18px]" />
           </RailButton>
@@ -282,11 +285,11 @@ export const ConversationSidebar = ({
               onClick={onNewChat}
               disabled={!canChat}
               className="flex h-9 items-center gap-2 rounded-lg px-2 hover:bg-sidebar-accent disabled:pointer-events-none"
-              title="New chat"
+              title={t("sidebar.newChat")}
             >
               <img src="/favicon.svg" alt="" className="size-6" />
               <span className="text-[15px] font-semibold tracking-tight">
-                SSD AI
+                {t("app.name")}
               </span>
               <span className="text-[10px] font-normal text-muted-foreground">
                 v{__APP_VERSION__}
@@ -299,14 +302,14 @@ export const ConversationSidebar = ({
                   size="icon"
                   onClick={onToggleCollapse}
                   className="size-9 rounded-lg text-foreground/70 hover:bg-sidebar-accent dark:hover:bg-sidebar-accent"
-                  aria-label="Close sidebar"
+                  aria-label={t("sidebar.closeSidebar")}
                 >
                   <PanelLeftCloseIcon className="size-5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">
                 <span className="flex items-center gap-2">
-                  Close sidebar
+                  {t("sidebar.closeSidebar")}
                   <Kbd keys={[modKeyLabel, shiftKeyLabel, "S"]} />
                 </span>
               </TooltipContent>
@@ -317,14 +320,14 @@ export const ConversationSidebar = ({
           <nav className="shrink-0 space-y-0.5 px-2 pb-2">
             <NavRow
               icon={<SquarePenIcon />}
-              label="New chat"
+              label={t("sidebar.newChat")}
               shortcut={[modKeyLabel, shiftKeyLabel, "O"]}
               onClick={onNewChat}
               disabled={!canChat}
             />
             <NavRow
               icon={<SearchIcon />}
-              label="Search chats"
+              label={t("sidebar.searchChats")}
               shortcut={[modKeyLabel, "K"]}
               onClick={onOpenSearch}
               disabled={!canChat}
@@ -348,8 +351,8 @@ export const ConversationSidebar = ({
               ) : conversations.length === 0 ? (
                 <div className="px-4 py-8 text-center text-sm text-muted-foreground">
                   {isAuthenticated
-                    ? "Your chats will appear here."
-                    : "Sign in to see your chats."}
+                    ? t("sidebar.emptyAuthed")
+                    : t("sidebar.emptyGuest")}
                 </div>
               ) : (
                 <div className="px-2 pb-4">
@@ -429,7 +432,7 @@ export const ConversationSidebar = ({
                                       "[mask-image:linear-gradient(to_right,black_75%,transparent)]",
                                   )}
                                 >
-                                  {item.data.title || "New chat"}
+                                  {item.data.title || t("sidebar.untitled")}
                                 </span>
                               </button>
                               <DropdownMenu
@@ -441,7 +444,7 @@ export const ConversationSidebar = ({
                                 <DropdownMenuTrigger asChild>
                                   <button
                                     type="button"
-                                    aria-label="Chat options"
+                                    aria-label={t("sidebar.chatOptions")}
                                     className={cn(
                                       "absolute right-1 flex size-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground",
                                       "opacity-0 group-hover/item:opacity-100 focus-visible:opacity-100",
@@ -465,7 +468,7 @@ export const ConversationSidebar = ({
                                     ) : (
                                       <PinIcon />
                                     )}
-                                    {item.pinned ? "Unpin" : "Pin"}
+                                    {item.pinned ? t("sidebar.unpin") : t("sidebar.pin")}
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
                                     onSelect={() => {
@@ -474,7 +477,7 @@ export const ConversationSidebar = ({
                                     }}
                                   >
                                     <PencilIcon />
-                                    Rename
+                                    {t("common.rename")}
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem
@@ -484,7 +487,7 @@ export const ConversationSidebar = ({
                                     className="text-destructive focus:text-destructive [&_svg]:!text-destructive"
                                   >
                                     <TrashIcon />
-                                    Delete
+                                    {t("common.delete")}
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
@@ -524,6 +527,7 @@ const AccountMenu = ({
 }) => {
   const { isAuthenticated, isCheckingAuth, logout, isLoading } = useAuth();
   const { theme, setTheme } = useTheme();
+  const { t, pref, setPref } = useI18n();
   const [loginOpen, setLoginOpen] = useState(false);
 
   useEffect(() => {
@@ -544,14 +548,14 @@ const AccountMenu = ({
             variant="ghost"
             size="icon"
             className="size-9 rounded-lg"
-            aria-label="Log in"
+            aria-label={t("account.logIn")}
           >
             <LogInIcon className="size-[18px]" />
           </Button>
         ) : (
           <Button className="h-10 w-full rounded-full font-medium">
             <LogInIcon className="size-4" />
-            Log in
+            {t("account.logIn")}
           </Button>
         )}
       </LoginDialog>
@@ -570,7 +574,7 @@ const AccountMenu = ({
         {compact ? (
           <button
             type="button"
-            aria-label="Account"
+            aria-label={t("account.account")}
             className="flex size-9 items-center justify-center rounded-lg hover:bg-sidebar-accent"
           >
             {avatar}
@@ -583,7 +587,7 @@ const AccountMenu = ({
             {avatar}
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium">
-                Account
+                {t("account.account")}
               </span>
             </span>
             <ChevronsUpDownIcon className="size-4 text-muted-foreground" />
@@ -597,33 +601,57 @@ const AccountMenu = ({
       >
         <DropdownMenuItem onSelect={() => onOpenSettings?.()}>
           <SettingsIcon />
-          Settings
+          {t("account.settings")}
         </DropdownMenuItem>
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <SunMoonIcon />
-            Theme
+            {t("account.theme")}
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="min-w-36">
             <DropdownMenuRadioGroup
               value={theme}
               onValueChange={(v) => setTheme(v as Theme)}
             >
-              <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="system">
+                {t("account.themeSystem")}
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="light">
+                {t("account.themeLight")}
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="dark">
+                {t("account.themeDark")}
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <LanguagesIcon />
+            {t("account.language")}
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="min-w-36">
+            <DropdownMenuRadioGroup
+              value={pref}
+              onValueChange={(v) => setPref(v as LanguagePref)}
+            >
+              <DropdownMenuRadioItem value="system">
+                {t("account.languageSystem")}
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="zh">简体中文</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="en">English</DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
         <DropdownMenuItem onSelect={() => onOpenShortcuts?.()}>
           <KeyboardIcon />
-          <span className="whitespace-nowrap">Keyboard shortcuts</span>
+          <span className="whitespace-nowrap">{t("account.shortcuts")}</span>
           <Kbd keys={[modKeyLabel, "/"]} className="ml-auto max-md:hidden" />
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <a href="/api/gateway-health/" target="_blank" rel="noopener">
             <ActivityIcon />
-            Gateway status
+            {t("account.gatewayStatus")}
           </a>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
@@ -634,7 +662,7 @@ const AccountMenu = ({
           }}
         >
           <LogOutIcon />
-          {isLoading ? "Logging out..." : "Log out"}
+          {isLoading ? t("account.loggingOut") : t("account.logOut")}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

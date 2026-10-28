@@ -11,8 +11,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSettingsData } from "@/hooks/useSettingsData";
+import { useI18n } from "@/lib/i18n";
 
 export const MediaSection = () => {
+  const { t } = useI18n();
   const { data, models, updateSettingsLocal, saveSettings } = useSettingsData();
 
   const [hasChanges, setHasChanges] = useState(false);
@@ -69,7 +71,7 @@ export const MediaSection = () => {
     { value: "0.25", label: "0.25×" },
     { value: "0.5", label: "0.5×" },
     { value: "0.75", label: "0.75×" },
-    { value: "1", label: "1× (default)" },
+    { value: "1", label: t("media.speedDefault") },
     { value: "1.25", label: "1.25×" },
     { value: "1.5", label: "1.5×" },
     { value: "1.75", label: "1.75×" },
@@ -87,13 +89,13 @@ export const MediaSection = () => {
     <div className="space-y-8 max-w-2xl">
       <h3 className="text-lg font-medium flex items-center gap-2">
         <ImageIcon className="h-5 w-5" />
-        Media Settings
+        {t("media.title")}
       </h3>
 
       <div className="space-y-4">
         <div className="flex justify-between items-center mb-0 pb-2">
           <Label htmlFor="image-model" className="text-nowrap">
-            Image Model
+            {t("media.imageModel")}
           </Label>
           <ModelSelect
             models={enabledModels}
@@ -105,10 +107,10 @@ export const MediaSection = () => {
             onChange={(value) => handleChange("imageModel", value)}
             loading={false}
             disabled={isSaving}
-            helperMessage="Used for image generation tools"
+            helperMessage={t("media.imageModelHint")}
             size="sm"
             triggerId="image-model"
-            triggerAriaLabel="Image model"
+            triggerAriaLabel={t("media.imageModel")}
             triggerClassName="max-sm:max-w-[180px] max-sm:mr-4"
             contentClassName="max-h-60"
             showCount={enabledModels.length > 0}
@@ -117,7 +119,7 @@ export const MediaSection = () => {
 
         <div className="flex justify-between items-center mb-0 pb-2">
           <Label htmlFor="tts-model" className="text-nowrap">
-            TTS Model
+            {t("media.ttsModel")}
           </Label>
           <ModelSelect
             models={enabledModels}
@@ -129,10 +131,10 @@ export const MediaSection = () => {
             onChange={(value) => handleChange("ttsModel", value)}
             loading={false}
             disabled={isSaving}
-            helperMessage="OpenAI-compatible speech model for read aloud"
+            helperMessage={t("media.ttsModelHint")}
             size="sm"
             triggerId="tts-model"
-            triggerAriaLabel="TTS model"
+            triggerAriaLabel={t("media.ttsModel")}
             triggerClassName="max-sm:max-w-[180px] max-sm:mr-4"
             contentClassName="max-h-60"
             showCount={enabledModels.length > 0}
@@ -141,7 +143,7 @@ export const MediaSection = () => {
 
         <div className="flex justify-between items-center !my-0 pb-2">
           <Label htmlFor="tts-voice" className="text-nowrap">
-            TTS Voice
+            {t("media.ttsVoice")}
           </Label>
           <Select
             value={local.ttsVoice}
@@ -174,7 +176,7 @@ export const MediaSection = () => {
 
         <div className="flex justify-between items-center !my-0 pb-2">
           <Label htmlFor="tts-speed" className="text-nowrap">
-            TTS Speed
+            {t("media.ttsSpeed")}
           </Label>
           <Select
             value={speedSelectValue}
@@ -206,7 +208,7 @@ export const MediaSection = () => {
               className="gap-2"
             >
               <Save className="h-4 w-4" />
-              {isSaving ? "Saving..." : "Save Changes"}
+              {isSaving ? t("common.saving") : t("common.saveChanges")}
             </Button>
             <Button
               onClick={handleReset}
@@ -216,7 +218,7 @@ export const MediaSection = () => {
               className="gap-2"
             >
               <RotateCcw className="h-4 w-4" />
-              Reset
+              {t("common.reset")}
             </Button>
           </div>
         )}

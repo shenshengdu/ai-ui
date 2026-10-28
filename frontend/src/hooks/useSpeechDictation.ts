@@ -65,11 +65,8 @@ export function useSpeechDictation(onFinalText: (text: string) => void) {
     };
     rec.onerror = (e) => {
       if (e.error !== "aborted" && e.error !== "no-speech") {
-        setError(
-          e.error === "not-allowed"
-            ? "Microphone permission denied"
-            : `Voice input error: ${e.error}`,
-        );
+        // Raw Web Speech error code; the UI translates it.
+        setError(e.error);
       }
     };
     rec.onend = () => {

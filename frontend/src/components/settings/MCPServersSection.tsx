@@ -6,8 +6,10 @@ import { Edit, Loader2, Plus, RotateCcw, Server, Trash2 } from "lucide-react";
 import { MCPServerForm } from "./MCPServerForm";
 import { MCPServerRequest, MCPServerResponse } from "@/lib/api/types";
 import { useSettingsData } from "@/hooks/useSettingsData";
+import { useI18n } from "@/lib/i18n";
 
 export const MCPServersSection = () => {
+  const { t } = useI18n();
   const { data, addMCPServer, updateMCPServer, deleteMCPServer, refreshMCPTools, restoreDefaultMCPServer } =
     useSettingsData();
   const [showAddForm, setShowAddForm] = useState(false);
@@ -32,7 +34,7 @@ export const MCPServersSection = () => {
   };
 
   const handleDeleteServer = async (id: string) => {
-    if (confirm("Are you sure you want to delete this MCP server?")) {
+    if (confirm(t("mcp.confirmDelete"))) {
       await deleteMCPServer(id);
     }
   };
@@ -66,7 +68,7 @@ export const MCPServersSection = () => {
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-medium flex items-center gap-2">
           <Server className="h-5 w-5" />
-          MCP Servers
+          {t("mcp.title")}
         </h3>
         <div className="flex items-center gap-2">
           {!hasDefaultServer && (
@@ -75,14 +77,14 @@ export const MCPServersSection = () => {
               variant="outline"
               size="sm"
               disabled={restoringDefault}
-              title="Restore built-in default server"
+              title={t("mcp.restoreDefaultTitle")}
             >
               {restoringDefault ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <RotateCcw className="h-4 w-4" />
               )}
-              <span className="hidden sm:inline">Restore Default</span>
+              <span className="hidden sm:inline">{t("mcp.restoreDefault")}</span>
             </Button>
           )}
           <Button
@@ -91,7 +93,7 @@ export const MCPServersSection = () => {
             size="sm"
           >
             <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Add Server</span>
+            <span className="hidden sm:inline">{t("mcp.addServer")}</span>
           </Button>
         </div>
       </div>
@@ -99,7 +101,7 @@ export const MCPServersSection = () => {
       {data.mcpServers.length === 0 ? (
         <Card className="p-6 text-center bg-transparent border-dashed">
           <div className="space-y-2">
-            <p className="text-muted-foreground">No MCP servers configured</p>
+            <p className="text-muted-foreground">{t("mcp.empty")}</p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
               <Button
                 onClick={() => setShowAddForm(true)}
@@ -107,7 +109,7 @@ export const MCPServersSection = () => {
                 size="sm"
               >
                 <Plus className="h-4 w-4" />
-                Add Your First MCP Server
+                {t("mcp.addFirst")}
               </Button>
               <Button
                 onClick={handleRestoreDefaultServer}
@@ -120,7 +122,7 @@ export const MCPServersSection = () => {
                 ) : (
                   <RotateCcw className="h-4 w-4" />
                 )}
-                Restore Default Server
+                {t("mcp.restoreDefaultServer")}
               </Button>
             </div>
           </div>
@@ -146,7 +148,7 @@ export const MCPServersSection = () => {
                       size="sm"
                       onClick={() => handleRefreshTools(server.id)}
                       disabled={refreshingServers.has(server.id)}
-                      title="Refresh tools from MCP server"
+                      title={t("mcp.refreshTools")}
                     >
                       {refreshingServers.has(server.id) ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -158,7 +160,7 @@ export const MCPServersSection = () => {
                       variant="ghost"
                       size="sm"
                       onClick={() => setEditingServer(server)}
-                      title="Edit MCP server"
+                      title={t("mcp.edit")}
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
@@ -167,7 +169,7 @@ export const MCPServersSection = () => {
                       size="sm"
                       onClick={() => handleDeleteServer(server.id)}
                       className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
-                      title="Delete MCP server"
+                      title={t("mcp.delete")}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -198,7 +200,7 @@ export const MCPServersSection = () => {
                     ))}
                     {server.tools.length > 5 && (
                       <Badge variant="outline" className="text-xs">
-                        +{server.tools.length - 5} more
+                        {t("providers.more", { count: server.tools.length - 5 })}
                       </Badge>
                     )}
                   </div>
@@ -214,8 +216,8 @@ export const MCPServersSection = () => {
         open={showAddForm}
         onOpenChange={setShowAddForm}
         onSubmit={handleAddServer}
-        title="Add MCP Server"
-        submitLabel="Add Server"
+        title={t("mcp.addTitle")}
+        submitLabel={t("mcp.addServer")}
       />
 
       {/* Edit MCP Server Form */}
@@ -224,8 +226,8 @@ export const MCPServersSection = () => {
         onOpenChange={(open) => !open && setEditingServer(null)}
         onSubmit={handleEditServer}
         server={editingServer}
-        title="Edit MCP Server"
-        submitLabel="Update Server"
+        title={t("mcp.editTitle")}
+        submitLabel={t("mcp.updateServer")}
       />
     </div>
   );

@@ -2,18 +2,19 @@
 
 import { cn } from "@/lib/utils";
 import { ComponentProps, useMemo } from "react";
+import { useI18n, type MessageKey } from "@/lib/i18n";
 
 export interface WelcomeProps extends ComponentProps<"div"> {
   isLoading?: boolean;
   isAuthenticated?: boolean;
 }
 
-const GREETINGS = [
-  "What can I help with?",
-  "What's on your mind today?",
-  "Where should we begin?",
-  "What are you working on?",
-  "Ready when you are.",
+const GREETINGS: MessageKey[] = [
+  "welcome.greeting1",
+  "welcome.greeting2",
+  "welcome.greeting3",
+  "welcome.greeting4",
+  "welcome.greeting5",
 ];
 
 /** Empty-chat greeting shown above the centered composer (ChatGPT-style). */
@@ -23,6 +24,7 @@ export const Welcome = ({
   isAuthenticated = true,
   ...props
 }: WelcomeProps) => {
+  const { t } = useI18n();
   // Pick once per mount so the heading doesn't flicker on re-render.
   const greeting = useMemo(
     () => GREETINGS[Math.floor(Math.random() * GREETINGS.length)],
@@ -43,11 +45,11 @@ export const Welcome = ({
           isLoading && "invisible",
         )}
       >
-        {isAuthenticated ? greeting : "Welcome to SSD AI"}
+        {isAuthenticated ? t(greeting) : t("welcome.guestTitle")}
       </h1>
       {!isLoading && !isAuthenticated && (
         <p className="mt-3 max-w-md text-center text-sm text-muted-foreground animate-slide-up">
-          Log in to load your conversations and start chatting.
+          {t("welcome.guestBody")}
         </p>
       )}
     </div>

@@ -16,6 +16,7 @@ import {
 import { locallyApplyToolFlags } from "@/lib/api/tools";
 import { Tool } from "@/lib/api/types";
 import { useSettingsData } from "@/hooks/useSettingsData";
+import { useI18n } from "@/lib/i18n";
 
 /**
  * ToolsSection
@@ -27,6 +28,7 @@ import { useSettingsData } from "@/hooks/useSettingsData";
  * - Search/filter functionality
  */
 export const ToolsSection: React.FC = () => {
+  const { t } = useI18n();
   const { data, updateToolsLocal, saveTools } = useSettingsData();
   const [search, setSearch] = useState("");
   const [selection, setSelection] = useState<Set<string>>(new Set());
@@ -166,7 +168,7 @@ export const ToolsSection: React.FC = () => {
         <div className="flex items-center justify-between flex-wrap gap-3">
           <h3 className="text-lg font-medium flex items-center gap-2">
             <Wrench className="h-5 w-5" />
-            Tools
+            {t("tools.title")}
           </h3>
 
           <div className="flex items-center gap-2"></div>
@@ -176,7 +178,7 @@ export const ToolsSection: React.FC = () => {
           <div className="relative flex-1">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search tools..."
+              placeholder={t("tools.search")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-8 h-8 text-sm focus-visible:ring-0 focus-visible:outline-none focus-visible:border-border border-border/70"
@@ -196,12 +198,12 @@ export const ToolsSection: React.FC = () => {
               {allVisibleSelected ? (
                 <>
                   <CheckSquare className="h-4 w-4" />
-                  Deselect
+                  {t("list.deselect")}
                 </>
               ) : (
                 <>
                   <Square className="h-4 w-4" />
-                  Select All
+                  {t("list.selectAll")}
                 </>
               )}
             </Button>
@@ -213,7 +215,7 @@ export const ToolsSection: React.FC = () => {
               className="gap-1 h-8"
             >
               <Eye className="h-4 w-4" />
-              Enable
+              {t("list.enable")}
             </Button>
 
             <Button
@@ -224,21 +226,24 @@ export const ToolsSection: React.FC = () => {
               className="gap-1 h-8"
             >
               <EyeOff className="h-4 w-4" />
-              Disable
+              {t("list.disable")}
             </Button>
           </div>
         </div>
 
         <div className="text-xs text-muted-foreground flex flex-wrap gap-x-4 gap-y-1">
           <span>
-            {filtered.length} tool{filtered.length !== 1 && "s"} shown
+            {t("tools.shown", { count: filtered.length })}
           </span>
-          <span>{enabledInFiltered} enabled</span>
-          <span>{approvalRequiredInFiltered} require approval</span>
+          <span>{t("tools.enabledCount", { count: enabledInFiltered })}</span>
+          <span>{t("tools.approvalCount", { count: approvalRequiredInFiltered })}</span>
           {selection.size > 0 && (
             <span>
-              Selected: {selection.size} (E:{enabledSelectedCount} / D:
-              {disabledSelectedCount})
+              {t("list.selectedSummary", {
+                count: selection.size,
+                on: enabledSelectedCount,
+                off: disabledSelectedCount,
+              })}
             </span>
           )}
         </div>
@@ -249,7 +254,7 @@ export const ToolsSection: React.FC = () => {
         {filtered.length === 0 && (
           <Card className="p-8 text-center bg-transparent border-dashed h-full">
             <p className="text-sm text-muted-foreground">
-              {search ? "No tools match your search." : "No tools available."}
+              {search ? t("tools.noMatch") : t("tools.emptyList")}
             </p>
           </Card>
         )}
@@ -334,8 +339,8 @@ export const ToolsSection: React.FC = () => {
                           } ${pending ? "opacity-50 cursor-wait" : "cursor-pointer"}`}
                           title={
                             tool.require_approval
-                              ? "Remove approval requirement"
-                              : "Require approval"
+                              ? t("tools.removeApproval")
+                              : t("tools.requireApproval")
                           }
                         >
                           <ShieldAlert className="h-3.5 w-3.5" />
@@ -349,7 +354,7 @@ export const ToolsSection: React.FC = () => {
                           }
                           disabled={pending || bulkBusy}
                           title={
-                            tool.is_enabled ? "Disable tool" : "Enable tool"
+                            tool.is_enabled ? t("tools.disableTool") : t("tools.enableTool")
                           }
                         />
                       </div>

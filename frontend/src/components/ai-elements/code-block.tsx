@@ -10,6 +10,7 @@ import {
 } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 const ENABLE_HIGHLIGHTING = true; // Disable highlighting in dev for performance
 
@@ -229,6 +230,7 @@ export const CodeBlockCopyButton = ({
 }: CodeBlockCopyButtonProps) => {
   const [isCopied, setIsCopied] = useState(false);
   const { code } = useContext(CodeBlockContext);
+  const { t } = useI18n();
 
   const copyToClipboard = async () => {
     if (typeof window === "undefined" || !navigator.clipboard.writeText) {
@@ -257,13 +259,13 @@ export const CodeBlockCopyButton = ({
       onClick={copyToClipboard}
       size="sm"
       variant="ghost"
-      aria-label={isCopied ? "Copied" : "Copy code"}
+      aria-label={isCopied ? t("code.copied") : t("code.copyCode")}
       {...props}
     >
       {children ?? (
         <>
           <Icon className="size-3.5" />
-          {isCopied ? "Copied" : "Copy"}
+          {isCopied ? t("code.copied") : t("code.copy")}
         </>
       )}
     </Button>

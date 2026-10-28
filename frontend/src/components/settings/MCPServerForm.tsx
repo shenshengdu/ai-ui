@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { AlertCircle, Loader2, Plus, Trash2 } from "lucide-react";
 import { MCPServerRequest, MCPServerResponse } from "@/lib/api/types";
+import { useI18n } from "@/lib/i18n";
 
 interface MCPServerFormProps {
   open: boolean;
@@ -29,6 +30,7 @@ export const MCPServerForm = ({
   title,
   submitLabel,
 }: MCPServerFormProps) => {
+  const { t } = useI18n();
   const [formData, setFormData] = useState<MCPServerRequest>({
     id: server?.id || "",
     name: server?.name || "",
@@ -60,12 +62,12 @@ export const MCPServerForm = ({
 
     // Validation
     if (!formData.name.trim()) {
-      setError("Name is required");
+      setError(t("mcpForm.nameRequired"));
       return;
     }
 
     if (!formData.endpoint.trim()) {
-      setError("Endpoint is required");
+      setError(t("mcpForm.endpointRequired"));
       return;
     }
 
@@ -73,7 +75,7 @@ export const MCPServerForm = ({
     try {
       new URL(formData.endpoint);
     } catch {
-      setError("Please enter a valid endpoint URL");
+      setError(t("mcpForm.invalidEndpoint"));
       return;
     }
 
@@ -95,7 +97,7 @@ export const MCPServerForm = ({
       onOpenChange(false);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to save MCP server",
+        err instanceof Error ? err.message : t("mcpForm.saveFailed"),
       );
     } finally {
       setIsSubmitting(false);
@@ -137,11 +139,11 @@ export const MCPServerForm = ({
           )}
 
           <div className="space-y-1.5">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="name">{t("common.name")}</Label>
             <Input
               id="name"
               type="text"
-              placeholder="My MCP Server"
+              placeholder={t("mcpForm.namePlaceholder")}
               value={formData.name}
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, name: e.target.value }))
@@ -152,7 +154,7 @@ export const MCPServerForm = ({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="endpoint">Endpoint</Label>
+            <Label htmlFor="endpoint">{t("mcpForm.endpoint")}</Label>
             <Input
               id="endpoint"
               type="url"
@@ -168,7 +170,7 @@ export const MCPServerForm = ({
 
           <div className="space-y-2.5">
             <div className="flex items-center justify-between pt-2">
-              <Label>Custom Headers</Label>
+              <Label>{t("providerForm.customHeaders")}</Label>
               <Button
                 type="button"
                 variant="outline"
@@ -179,7 +181,7 @@ export const MCPServerForm = ({
                 disabled={isSubmitting}
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Add Header
+                {t("providerForm.addHeader")}
               </Button>
             </div>
 
@@ -188,7 +190,7 @@ export const MCPServerForm = ({
                 {headerEntries.map((header, index) => (
                   <div key={index} className="flex items-center gap-2">
                     <Input
-                      placeholder="Key"
+                      placeholder={t("providerForm.key")}
                       value={header.key}
                       onChange={(e) => {
                         const newEntries = [...headerEntries];
@@ -198,7 +200,7 @@ export const MCPServerForm = ({
                       disabled={isSubmitting}
                     />
                     <Input
-                      placeholder="Value"
+                      placeholder={t("providerForm.value")}
                       value={header.value}
                       onChange={(e) => {
                         const newEntries = [...headerEntries];
@@ -225,7 +227,7 @@ export const MCPServerForm = ({
               </div>
             ) : (
               <p className="text-sm text-muted-foreground italic">
-                No custom headers configured.
+                {t("providerForm.noHeaders")}
               </p>
             )}
           </div>
@@ -237,7 +239,7 @@ export const MCPServerForm = ({
               onClick={handleCancel}
               disabled={isSubmitting}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting && (

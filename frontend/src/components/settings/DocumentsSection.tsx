@@ -5,8 +5,10 @@ import { Switch } from "@/components/ui/switch";
 import { Save, RotateCcw, FileText } from "lucide-react";
 import { ModelSelect } from "@/components/ai-elements/model-select.tsx";
 import { useSettingsData } from "@/hooks/useSettingsData";
+import { useI18n } from "@/lib/i18n";
 
 export const DocumentsSection = () => {
+  const { t } = useI18n();
   const { data, models, updateSettingsLocal, saveSettings } = useSettingsData();
 
   const [hasChanges, setHasChanges] = useState(false);
@@ -86,15 +88,15 @@ export const DocumentsSection = () => {
     <div className="space-y-8 max-w-2xl">
       <h3 className="text-lg font-medium flex items-center gap-2">
         <FileText className="h-5 w-5" />
-        Document Settings
+        {t("documents.title")}
       </h3>
 
       <div className="space-y-4">
         <div className="flex justify-between items-center pb-2">
           <div className="space-y-0.5">
-            <Label>Agentic PDF Retrieval</Label>
+            <Label>{t("documents.agentic")}</Label>
             <p className="text-sm text-muted-foreground mr-4">
-              Allows the AI to dynamically search, read, and view PDF pages.
+              {t("documents.agenticDesc")}
             </p>
           </div>
           <Switch
@@ -103,17 +105,17 @@ export const DocumentsSection = () => {
             disabled={isSaving}
             title={
               local.agenticDocumentRetrieval
-                ? "Disable agentic retrieval"
-                : "Enable agentic retrieval"
+                ? t("documents.disableAgentic")
+                : t("documents.enableAgentic")
             }
           />
         </div>
 
         <div className="flex justify-between items-center pb-2">
           <div className="space-y-0.5">
-            <Label>OCR Only Mode</Label>
+            <Label>{t("documents.ocrOnly")}</Label>
             <p className="text-sm text-muted-foreground">
-              Pass attachments to OCR when uploading
+              {t("documents.ocrOnlyDesc")}
             </p>
           </div>
           <Switch
@@ -122,8 +124,8 @@ export const DocumentsSection = () => {
             disabled={isSaving}
             title={
               local.attachmentOcrOnly
-                ? "Disable OCR only mode"
-                : "Enable OCR only mode"
+                ? t("documents.disableOcrOnly")
+                : t("documents.enableOcrOnly")
             }
           />
         </div>
@@ -131,10 +133,10 @@ export const DocumentsSection = () => {
         <div className="flex justify-between items-center pb-2">
           <div className="space-y-0.5">
             <Label htmlFor="ocr-model" className="text-nowrap">
-              OCR Model
+              {t("documents.ocrModel")}
             </Label>
             <p className="text-sm text-muted-foreground mr-4 hidden sm:block">
-              Select a model capable of processing attachments
+              {t("documents.ocrModelDesc")}
             </p>
           </div>
           <ModelSelect
@@ -143,10 +145,10 @@ export const DocumentsSection = () => {
             onChange={handleModelChange}
             loading={false}
             disabled={isSaving}
-            helperMessage="Select a model for OCR processing"
+            helperMessage={t("documents.ocrModelHint")}
             size="sm"
             triggerId="ocr-model"
-            triggerAriaLabel="OCR model"
+            triggerAriaLabel={t("documents.ocrModel")}
             triggerClassName="max-sm:max-w-[180px] max-sm:mr-4"
             contentClassName="max-h-60"
             showCount={enabledModels.length > 0}
@@ -163,7 +165,7 @@ export const DocumentsSection = () => {
             className="gap-2"
           >
             <Save className="h-4 w-4" />
-            {isSaving ? "Saving..." : "Save Changes"}
+            {isSaving ? t("common.saving") : t("common.saveChanges")}
           </Button>
           <Button
             onClick={handleReset}
@@ -173,7 +175,7 @@ export const DocumentsSection = () => {
             className="gap-2"
           >
             <RotateCcw className="h-4 w-4" />
-            Reset
+            {t("common.reset")}
           </Button>
         </div>
       )}

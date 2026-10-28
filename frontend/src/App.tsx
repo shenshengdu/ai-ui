@@ -22,6 +22,7 @@ import { SettingsDialog } from "@/components/settings";
 import { Attachment } from "@/lib/api/types";
 import { NavigateFunction, useNavigate, useParams } from "react-router-dom";
 import { hasModKey, isMobileViewport } from "@/lib/platform";
+import { useI18n } from "@/lib/i18n";
 
 import { XIcon } from "lucide-react";
 
@@ -69,6 +70,7 @@ function App() {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const chatRef = useRef<ChatInterfaceHandle>(null);
   const { unpin } = usePinnedConversations();
+  const { t } = useI18n();
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [lastMessageSignature, setLastMessageSignature] = useState<string>("");
@@ -407,8 +409,9 @@ function App() {
   // Browser tab title follows the open chat.
   const displayedTitle = displayedConversation?.title;
   useEffect(() => {
-    document.title = displayedTitle ? `${displayedTitle} · SSD AI` : "SSD AI";
-  }, [displayedTitle]);
+    const app = t("app.name");
+    document.title = displayedTitle ? `${displayedTitle} · ${app}` : app;
+  }, [displayedTitle, t]);
 
   return (
     <div
@@ -473,7 +476,7 @@ function App() {
                     size="icon"
                     onClick={clearError}
                     className="size-6 shrink-0 rounded-full text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    aria-label="Dismiss"
+                    aria-label={t("common.dismiss")}
                   >
                     <XIcon className="size-4" />
                   </Button>
@@ -500,17 +503,17 @@ function App() {
         onOpenChange={(open) => {
           if (!open) setPendingDeleteId(null);
         }}
-        title="Delete chat?"
+        title={t("deleteChat.title")}
         description={
           <>
-            This will delete{" "}
+            {t("deleteChat.descriptionBefore")}
             <strong className="font-semibold text-foreground">
-              {pendingDeleteTitle || "this chat"}
+              {pendingDeleteTitle || t("deleteChat.fallbackName")}
             </strong>
-            . This can't be undone.
+            {t("deleteChat.descriptionAfter")}
           </>
         }
-        confirmLabel="Delete"
+        confirmLabel={t("common.delete")}
         destructive
         onConfirm={() => {
           if (pendingDeleteId) void handleDeleteConversation(pendingDeleteId);

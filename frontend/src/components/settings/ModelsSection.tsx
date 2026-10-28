@@ -17,8 +17,10 @@ import { formatProviderSelectLabel } from "@/lib/api/providers";
 import { Model } from "@/lib/api/types";
 import { getModelTags } from "@/lib/model-tags";
 import { useSettingsData } from "@/hooks/useSettingsData";
+import { useI18n } from "@/lib/i18n";
 
 export const ModelsSection: React.FC = () => {
+  const { t } = useI18n();
   const { models, updateModelsLocal, saveModels } = useSettingsData();
   const [search, setSearch] = useState("");
   const [selection, setSelection] = useState<Set<string>>(new Set());
@@ -136,7 +138,7 @@ export const ModelsSection: React.FC = () => {
         <div className="flex items-center justify-between flex-wrap gap-3">
           <h3 className="text-lg font-medium flex items-center gap-2">
             <ShieldCheck className="h-5 w-5" />
-            Models
+            {t("models.title")}
           </h3>
         </div>
 
@@ -145,7 +147,7 @@ export const ModelsSection: React.FC = () => {
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
 
             <Input
-              placeholder="Search models or providers..."
+              placeholder={t("models.search")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-8 h-8 text-sm focus-visible:ring-0 focus-visible:outline-none focus-visible:border-border border-border/70"
@@ -165,12 +167,12 @@ export const ModelsSection: React.FC = () => {
               {allVisibleSelected ? (
                 <>
                   <CheckSquare className="h-4 w-4" />
-                  Deselect
+                  {t("list.deselect")}
                 </>
               ) : (
                 <>
                   <Square className="h-4 w-4" />
-                  Select All
+                  {t("list.selectAll")}
                 </>
               )}
             </Button>
@@ -182,7 +184,7 @@ export const ModelsSection: React.FC = () => {
               className="gap-1 h-8"
             >
               <Eye className="h-4 w-4" />
-              Enable
+              {t("list.enable")}
             </Button>
 
             <Button
@@ -193,22 +195,25 @@ export const ModelsSection: React.FC = () => {
               className="gap-1 h-8"
             >
               <EyeOff className="h-4 w-4" />
-              Disable
+              {t("list.disable")}
             </Button>
           </div>
         </div>
 
         <div className="text-xs text-muted-foreground flex flex-wrap gap-x-4 gap-y-1">
           <span>
-            {filtered.length} model{filtered.length !== 1 && "s"} shown
+            {t("models.shown", { count: filtered.length })}
           </span>
 
-          <span>{enabledInFiltered} enabled in view</span>
+          <span>{t("models.enabledInView", { count: enabledInFiltered })}</span>
 
           {selection.size > 0 && (
             <span>
-              Selected: {selection.size} (E:{enabledSelectedCount} / D:
-              {disabledSelectedCount})
+              {t("list.selectedSummary", {
+                count: selection.size,
+                on: enabledSelectedCount,
+                off: disabledSelectedCount,
+              })}
             </span>
           )}
         </div>
@@ -219,7 +224,7 @@ export const ModelsSection: React.FC = () => {
         {filtered.length === 0 && (
           <Card className="p-8 text-center bg-transparent border-dashed h-full">
             <p className="text-sm text-muted-foreground">
-              {search ? "No models match your search." : "No models available."}
+              {search ? t("models.noMatch") : t("models.emptyList")}
             </p>
           </Card>
         )}
@@ -300,7 +305,7 @@ export const ModelsSection: React.FC = () => {
                         onCheckedChange={() => handleSingleToggle(model)}
                         disabled={pending || bulkBusy}
                         title={
-                          model.is_enabled ? "Disable model" : "Enable model"
+                          model.is_enabled ? t("models.disableModel") : t("models.enableModel")
                         }
                       />
                     </div>

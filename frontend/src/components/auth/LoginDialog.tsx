@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button.tsx";
 import { LogInIcon } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth.tsx";
 import { cn } from "@/lib/utils.ts";
+import { useI18n } from "@/lib/i18n";
 
 interface LoginDialogProps {
   children?: React.ReactNode;
@@ -20,6 +21,7 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
   open,
   onOpenChange,
 }) => {
+  const { t } = useI18n();
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -52,12 +54,12 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
     if (!username.trim() || !password.trim()) return;
 
     if (!isLoginMode && password !== confirmPassword) {
-      setValidationError("Passwords do not match");
+      setValidationError(t("auth.passwordMismatch"));
       return;
     }
 
     if (!isLoginMode && password.length < 8) {
-      setValidationError("Password must be at least 8 characters");
+      setValidationError(t("auth.passwordTooShort"));
       return;
     }
 
@@ -124,7 +126,7 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
         {children || (
           <Button variant="outline" className="w-full justify-start gap-2">
             <LogInIcon className="size-4" />
-            Login
+            {t("auth.login")}
           </Button>
         )}
       </DialogTrigger>
@@ -149,15 +151,15 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
                   className="fill-background"
                 />
               </svg>
-              <h1 className="text-2xl font-bold">SSD AI</h1>
+              <h1 className="text-2xl font-bold">{t("app.name")}</h1>
             </div>
             <p
               className="text-muted-foreground animate-in fade-in slide-in-from-top-2 duration-300"
               key={isLoginMode ? "login-text" : "register-text"}
             >
               {isLoginMode
-                ? "Enter your credentials to continue"
-                : "Create a new account"}
+                ? t("auth.loginSubtitle")
+                : t("auth.registerSubtitle")}
             </p>
           </div>
 
@@ -166,7 +168,7 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
               <div className="space-y-2">
                 <input
                   type="text"
-                  placeholder="Username"
+                  placeholder={t("auth.username")}
                   value={username}
                   onChange={handleUsernameChange}
                   className={cn(
@@ -183,7 +185,7 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
               <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
-                  placeholder="Password"
+                  placeholder={t("auth.password")}
                   value={password}
                   onChange={handlePasswordChange}
                   className={cn(
@@ -249,7 +251,7 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
                   <div className="space-y-2 pt-1">
                     <input
                       type="password"
-                      placeholder="Confirm Password"
+                      placeholder={t("auth.confirmPassword")}
                       value={confirmPassword}
                       onChange={handleConfirmPasswordChange}
                       className={cn(
@@ -293,11 +295,11 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
             >
               {isLoading
                 ? isLoginMode
-                  ? "Logging in..."
-                  : "Registering..."
+                  ? t("auth.loggingIn")
+                  : t("auth.registering")
                 : isLoginMode
-                  ? "Login"
-                  : "Register"}
+                  ? t("auth.login")
+                  : t("auth.register")}
             </button>
 
             {registrationEnabled && (
@@ -309,8 +311,8 @@ export const LoginDialog: React.FC<LoginDialogProps> = ({
                   disabled={isLoading}
                 >
                   {isLoginMode
-                    ? "Don't have an account? Register"
-                    : "Already have an account? Login"}
+                    ? t("auth.noAccount")
+                    : t("auth.haveAccount")}
                 </button>
               </div>
             )}

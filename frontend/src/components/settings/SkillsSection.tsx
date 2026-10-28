@@ -7,8 +7,10 @@ import { BookOpen, Edit, ExternalLink, Eye, Plus, Trash2 } from "lucide-react";
 import { SkillForm } from "./SkillForm";
 import { SkillRequest, SkillResponse } from "@/lib/api/types";
 import { useSettingsData } from "@/hooks/useSettingsData";
+import { useI18n } from "@/lib/i18n";
 
 export const SkillsSection = () => {
+  const { t } = useI18n();
   const {
     data,
     addSkill,
@@ -53,7 +55,7 @@ export const SkillsSection = () => {
     if (id.startsWith("builtin:")) {
       return;
     }
-    if (confirm(`Are you sure you want to delete the skill "${name}"?`)) {
+    if (confirm(t("skills.confirmDelete", { name }))) {
       await deleteSkill(id);
     }
   };
@@ -71,7 +73,7 @@ export const SkillsSection = () => {
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-medium flex items-center gap-2">
           <BookOpen className="h-5 w-5" />
-          Skills
+          {t("skills.title")}
         </h3>
         <Button
           onClick={() => setShowAddForm(true)}
@@ -79,13 +81,12 @@ export const SkillsSection = () => {
           size="sm"
         >
           <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline">Add Skill</span>
+          <span className="hidden sm:inline">{t("skills.add")}</span>
         </Button>
       </div>
 
       <p className="text-sm text-muted-foreground">
-        Skills are markdown documents that teach the AI specialized workflows or
-        styles. The AI can list and read them via built-in tools during chat.{" "}
+        {t("skills.intro")}{" "}
         <a
           href="https://github.com/Bajahaw/ai-ui/tree/main/examples/skills"
           target="_blank"
@@ -93,12 +94,12 @@ export const SkillsSection = () => {
           className="text-primary inline-flex items-center gap-1 hover:underline"
         >
           <ExternalLink className="h-3.5 w-3.5" />
-          Browse example skills
+          {t("skills.browseExamples")}
         </a>
       </p>
 
       <div className="flex items-center justify-between">
-        <Label className="!mb-0">Enable built-in skills</Label>
+        <Label className="!mb-0">{t("skills.enableBuiltin")}</Label>
         <Switch
           className="mx-1"
           checked={builtinsEnabled}
@@ -110,14 +111,14 @@ export const SkillsSection = () => {
       {data.skills.length === 0 ? (
         <Card className="p-6 text-center bg-transparent border-dashed">
           <div className="space-y-2">
-            <p className="text-muted-foreground">No skills configured</p>
+            <p className="text-muted-foreground">{t("skills.empty")}</p>
             <Button
               onClick={() => setShowAddForm(true)}
               variant="outline"
               size="sm"
             >
               <Plus className="h-4 w-4" />
-              Add Your First Skill
+              {t("skills.addFirst")}
             </Button>
           </div>
         </Card>
@@ -126,7 +127,7 @@ export const SkillsSection = () => {
           {userSkills.length > 0 && (
             <div className="space-y-3">
               <h4 className="text-sm font-medium text-muted-foreground">
-                Your skills
+                {t("skills.yours")}
               </h4>
               {userSkills.map((skill) => (
                 <SkillCard
@@ -142,9 +143,9 @@ export const SkillsSection = () => {
           {builtinSkills.length > 0 && (
             <div className="space-y-3">
               <h4 className="text-sm font-medium text-muted-foreground">
-                Built-in skills
+                {t("skills.builtin")}
                 {!builtinsEnabled && (
-                  <span className="ml-2 text-xs font-normal">(disabled)</span>
+                  <span className="ml-2 text-xs font-normal">{t("skills.disabledTag")}</span>
                 )}
               </h4>
               {builtinSkills.map((skill) => (
@@ -164,8 +165,8 @@ export const SkillsSection = () => {
         open={showAddForm}
         onOpenChange={setShowAddForm}
         onSubmit={handleAddSkill}
-        title="Add Skill"
-        submitLabel="Add Skill"
+        title={t("skills.add")}
+        submitLabel={t("skills.add")}
       />
 
       <SkillForm
@@ -178,8 +179,8 @@ export const SkillsSection = () => {
         }}
         onSubmit={handleEditSkill}
         skill={editingSkill}
-        title={viewOnly ? "View Built-in Skill" : "Edit Skill"}
-        submitLabel="Save Changes"
+        title={viewOnly ? t("skills.viewBuiltinTitle") : t("skills.editTitle")}
+        submitLabel={t("common.saveChanges")}
         readOnly={viewOnly}
       />
     </div>
@@ -199,6 +200,7 @@ function SkillCard({
   onView?: () => void;
   onDelete?: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <Card
       className={`p-4 bg-transparent overflow-hidden ${
@@ -214,7 +216,7 @@ function SkillCard({
               </h4>
               {skill.builtin && (
                 <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                  System
+                  {t("skills.system")}
                 </span>
               )}
             </div>
@@ -225,7 +227,7 @@ function SkillCard({
                 variant="ghost"
                 size="sm"
                 onClick={onView}
-                title="View skill"
+                title={t("skills.view")}
               >
                 <Eye className="h-4 w-4" />
               </Button>
@@ -235,7 +237,7 @@ function SkillCard({
                 variant="ghost"
                 size="sm"
                 onClick={onEdit}
-                title="Edit skill"
+                title={t("skills.edit")}
               >
                 <Edit className="h-4 w-4" />
               </Button>
@@ -246,7 +248,7 @@ function SkillCard({
                 size="sm"
                 onClick={onDelete}
                 className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
-                title="Delete skill"
+                title={t("skills.delete")}
               >
                 <Trash2 className="h-4 w-4" />
               </Button>

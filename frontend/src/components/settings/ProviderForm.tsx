@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { AlertCircle, Loader2, Eye, EyeOff, Plus, Trash2 } from "lucide-react";
 import { ProviderRequest, FrontendProvider } from "@/lib/api/types";
+import { useI18n } from "@/lib/i18n";
 
 interface ProviderFormProps {
   open: boolean;
@@ -29,6 +30,7 @@ export const ProviderForm = ({
   title,
   submitLabel,
 }: ProviderFormProps) => {
+  const { t } = useI18n();
   const [formData, setFormData] = useState<ProviderRequest>({
     base_url: provider?.baseUrl || "",
     api_key: "",
@@ -62,12 +64,12 @@ export const ProviderForm = ({
 
     // Validation
     if (!formData.base_url.trim()) {
-      setError("Base URL is required");
+      setError(t("providerForm.baseUrlRequired"));
       return;
     }
 
     if (!formData.api_key.trim()) {
-      setError("API Key is required");
+      setError(t("providerForm.apiKeyRequired"));
       return;
     }
 
@@ -75,7 +77,7 @@ export const ProviderForm = ({
     try {
       new URL(formData.base_url);
     } catch {
-      setError("Please enter a valid URL");
+      setError(t("providerForm.invalidUrl"));
       return;
     }
 
@@ -96,7 +98,7 @@ export const ProviderForm = ({
       setHeaderEntries([]);
       onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save provider");
+      setError(err instanceof Error ? err.message : t("providerForm.saveFailed"));
     } finally {
       setIsSubmitting(false);
     }
@@ -138,7 +140,7 @@ export const ProviderForm = ({
           )}
 
           <div className="space-y-1.5">
-            <Label htmlFor="base_url">Base URL</Label>
+            <Label htmlFor="base_url">{t("providerForm.baseUrl")}</Label>
             <Input
               id="base_url"
               type="url"
@@ -153,12 +155,12 @@ export const ProviderForm = ({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="api_key">API Key</Label>
+            <Label htmlFor="api_key">{t("providerForm.apiKey")}</Label>
             <div className="relative">
               <Input
                 id="api_key"
                 type={showApiKey ? "text" : "password"}
-                placeholder="Enter your API key"
+                placeholder={t("providerForm.apiKeyPlaceholder")}
                 value={formData.api_key}
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, api_key: e.target.value }))
@@ -181,7 +183,7 @@ export const ProviderForm = ({
                   <Eye className="h-4 w-4" />
                 )}
                 <span className="sr-only">
-                  {showApiKey ? "Hide" : "Show"} API key
+                  {showApiKey ? t("providerForm.hideKey") : t("providerForm.showKey")}
                 </span>
               </Button>
             </div>
@@ -189,7 +191,7 @@ export const ProviderForm = ({
 
           <div className="space-y-2.5">
             <div className="flex items-center justify-between pt-2">
-              <Label>Custom Headers</Label>
+              <Label>{t("providerForm.customHeaders")}</Label>
               <Button
                 type="button"
                 variant="outline"
@@ -200,7 +202,7 @@ export const ProviderForm = ({
                 disabled={isSubmitting}
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Add Header
+                {t("providerForm.addHeader")}
               </Button>
             </div>
 
@@ -209,7 +211,7 @@ export const ProviderForm = ({
                 {headerEntries.map((header, index) => (
                   <div key={index} className="flex items-center gap-2">
                     <Input
-                      placeholder="Key"
+                      placeholder={t("providerForm.key")}
                       value={header.key}
                       onChange={(e) => {
                         const newEntries = [...headerEntries];
@@ -219,7 +221,7 @@ export const ProviderForm = ({
                       disabled={isSubmitting}
                     />
                     <Input
-                      placeholder="Value"
+                      placeholder={t("providerForm.value")}
                       value={header.value}
                       onChange={(e) => {
                         const newEntries = [...headerEntries];
@@ -246,7 +248,7 @@ export const ProviderForm = ({
               </div>
             ) : (
               <p className="text-sm text-muted-foreground italic">
-                No custom headers configured.
+                {t("providerForm.noHeaders")}
               </p>
             )}
           </div>
@@ -258,7 +260,7 @@ export const ProviderForm = ({
               onClick={handleCancel}
               disabled={isSubmitting}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting && (

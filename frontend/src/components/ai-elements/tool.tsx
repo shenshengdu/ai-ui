@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/collapsible.tsx";
 import { cn } from "@/lib/utils.ts";
 import { CodeBlock } from "./code-block.tsx";
+import { useI18n } from "@/lib/i18n";
 
 /** Tool call lifecycle states used by the tool UI. */
 export type ToolCallState =
@@ -134,6 +135,7 @@ export type ToolApprovalProps = {
 };
 
 export const ToolApproval = ({ toolCallId, onAction }: ToolApprovalProps) => {
+  const { t } = useI18n();
   const [isUpdating, setIsUpdating] = useState(false);
 
   const handleApproval = async (approved: boolean) => {
@@ -158,7 +160,7 @@ export const ToolApproval = ({ toolCallId, onAction }: ToolApprovalProps) => {
   return (
     <div className="flex justify-between gap-3 p-4 border rounded-lg my-2">
       <div className="text-sm text-muted-foreground leading-8">
-        This tool requires your approval to run.
+        {t("tools.requiresApproval")}
       </div>
       <div className="flex gap-2 justify-end">
         <Button
@@ -169,7 +171,7 @@ export const ToolApproval = ({ toolCallId, onAction }: ToolApprovalProps) => {
           className="rounded-lg font-medium"
         >
           <XIcon className="pl-0 size-4" />
-          Reject
+          {t("tools.reject")}
         </Button>
         <Button
           size="sm"
@@ -178,7 +180,7 @@ export const ToolApproval = ({ toolCallId, onAction }: ToolApprovalProps) => {
           className="border-black bg-primary/90 font-medium rounded-lg"
         >
           <CheckIcon className="pl-0 size-4" />
-          Approve
+          {t("tools.approve")}
         </Button>
       </div>
     </div>
@@ -201,16 +203,19 @@ export type ToolInputProps = ComponentProps<"div"> & {
   input: unknown;
 };
 
-export const ToolInput = ({ className, input, ...props }: ToolInputProps) => (
+export const ToolInput = ({ className, input, ...props }: ToolInputProps) => {
+  const { t } = useI18n();
+  return (
   <div className={cn("space-y-2 overflow-hidden py-4", className)} {...props}>
     <h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-      Parameters
+      {t("tools.parameters")}
     </h4>
     <div className="rounded-md bg-muted/50">
       <CodeBlock code={JSON.stringify(input, null, 2)} language="json" />
     </div>
   </div>
-);
+  );
+};
 
 export type ToolOutputProps = ComponentProps<"div"> & {
   output: ReactNode;
@@ -223,6 +228,7 @@ export const ToolOutput = ({
   errorText,
   ...props
 }: ToolOutputProps) => {
+  const { t } = useI18n();
   if (!(output || errorText)) {
     return null;
   }
@@ -230,7 +236,7 @@ export const ToolOutput = ({
   return (
     <div className={cn("space-y-2", className)} {...props}>
       <h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-        {errorText ? "Error" : "Result"}
+        {errorText ? t("tools.error") : t("tools.result")}
       </h4>
       <div
         className={cn(

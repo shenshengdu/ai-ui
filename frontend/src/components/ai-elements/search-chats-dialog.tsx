@@ -17,6 +17,7 @@ import {
   conversationUpdatedAt,
   groupConversations,
 } from "@/lib/conversation-groups";
+import { useI18n } from "@/lib/i18n";
 
 type Row =
   | { kind: "header"; key: string; label: string }
@@ -77,6 +78,7 @@ export function SearchChatsDialog({
   const [loading, setLoading] = useState(false);
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  const { t, locale } = useI18n();
 
   // Reset each time the palette opens.
   useEffect(() => {
@@ -125,7 +127,7 @@ export function SearchChatsDialog({
       const sorted = [...conversations].sort(
         (a, b) => conversationUpdatedAt(b) - conversationUpdatedAt(a),
       );
-      for (const group of groupConversations(sorted.slice(0, 60))) {
+      for (const group of groupConversations(sorted.slice(0, 60), t, locale)) {
         out.push({
           kind: "header",
           key: `h-${group.label}`,
@@ -136,7 +138,7 @@ export function SearchChatsDialog({
             kind: "conversation",
             key: c.id,
             id: c.id,
-            title: c.title || "New chat",
+            title: c.title || t("sidebar.untitled"),
           });
         }
       }
@@ -164,12 +166,12 @@ export function SearchChatsDialog({
         kind: "conversation",
         key: h.conversationId,
         id: h.conversationId,
-        title: h.title || "New chat",
+        title: h.title || t("sidebar.untitled"),
         snippet: h.snippet,
       });
     }
     return out;
-  }, [deferred, conversations, hits]);
+  }, [deferred, conversations, hits, t, locale]);
 
   const selectable = useMemo(
     () =>
@@ -224,7 +226,7 @@ export function SearchChatsDialog({
           className="fixed top-[12vh] left-1/2 z-50 flex max-h-[min(560px,76vh)] w-[calc(100%-2rem)] max-w-[680px] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border bg-popover text-popover-foreground shadow-2xl animate-slide-up"
         >
           <DialogPrimitive.Title className="sr-only">
-            Search chats
+            {t("search.title")}
           </DialogPrimitive.Title>
           <div className="flex items-center gap-3 border-b px-5 py-4">
             {loading ? (
@@ -236,19 +238,19 @@ export function SearchChatsDialog({
               autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search chats..."
+              placeholder={t("search.placeholder")}
               className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
             />
             <DialogPrimitive.Close className="rounded-full p-1 text-muted-foreground hover:bg-accent hover:text-foreground">
               <XIcon className="size-5" />
-              <span className="sr-only">Close</span>
+              <span className="sr-only">{t("common.close")}</span>
             </DialogPrimitive.Close>
           </div>
 
           <div ref={listRef} className="flex-1 overflow-y-auto p-2">
             {rows.length === 0 && !loading && (
               <div className="py-12 text-center text-sm text-muted-foreground">
-                No chats found.
+                {t("search.noResults")}
               </div>
             )}
             {rows.map((row, i) => {
@@ -281,7 +283,7 @@ export function SearchChatsDialog({
                   {row.kind === "new" ? (
                     <>
                       <SquarePenIcon className="size-4 shrink-0" />
-                      <span className="font-medium">New chat</span>
+                      <span className="font-medium">{t("sidebar.newChat")}</span>
                     </>
                   ) : (
                     <>

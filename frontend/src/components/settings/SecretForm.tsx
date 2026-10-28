@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { AlertCircle, Check, Copy, Loader2 } from "lucide-react";
 import { SecretRequest, SecretResponse } from "@/lib/api/types";
+import { useI18n } from "@/lib/i18n";
 
 interface SecretFormProps {
   open: boolean;
@@ -34,6 +35,7 @@ export const SecretForm = ({
   submitLabel,
   secret,
 }: SecretFormProps) => {
+  const { t } = useI18n();
   const isEdit = Boolean(secret?.id);
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
@@ -74,17 +76,17 @@ export const SecretForm = ({
 
     const trimmedName = name.replace(/\s+/g, "").trim();
     if (/\s/.test(name)) {
-      setError("Spaces are not allowed in secret names");
+      setError(t("secretForm.noSpaces"));
       return;
     }
     if (!trimmedName || !NAME_RE.test(trimmedName)) {
       setError(
-        "Name must start with a letter; letters, digits, underscore only (no spaces)",
+        t("secretForm.invalidName"),
       );
       return;
     }
     if (!isEdit && !value) {
-      setError("Value is required");
+      setError(t("secretForm.valueRequired"));
       return;
     }
 
@@ -97,7 +99,7 @@ export const SecretForm = ({
       });
       onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save secret");
+      setError(err instanceof Error ? err.message : t("secretForm.saveFailed"));
     } finally {
       setIsSubmitting(false);
     }
@@ -111,7 +113,7 @@ export const SecretForm = ({
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="secret-name">Name</Label>
+            <Label htmlFor="secret-name">{t("common.name")}</Label>
             <Input
               id="secret-name"
               value={name}
@@ -126,7 +128,7 @@ export const SecretForm = ({
                 type="button"
                 onClick={copyRef}
                 className="inline-flex items-center gap-1.5 max-w-full rounded-md border bg-muted px-2 py-1 font-mono text-xs hover:bg-muted/80"
-                title="Copy for chat"
+                title={t("secrets.copyForChat")}
               >
                 <span className="truncate">{previewRef}</span>
                 {copied ? (
@@ -138,18 +140,18 @@ export const SecretForm = ({
             </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="secret-value">Value</Label>
+            <Label htmlFor="secret-value">{t("secretForm.value")}</Label>
             <Input
               id="secret-value"
               type="password"
               value={value}
               onChange={(e) => setValue(e.target.value)}
-              placeholder={isEdit ? "Leave blank to keep current value" : ""}
+              placeholder={isEdit ? t("secretForm.keepValue") : ""}
               autoComplete="new-password"
             />
             {isEdit && (
               <p className="text-xs text-muted-foreground">
-                Values are write-only and cannot be viewed after save.
+                {t("secretForm.writeOnly")}
               </p>
             )}
           </div>
@@ -166,7 +168,7 @@ export const SecretForm = ({
               onClick={() => onOpenChange(false)}
               disabled={isSubmitting}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}

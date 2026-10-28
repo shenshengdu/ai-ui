@@ -12,6 +12,7 @@ import {
   PresentationIcon,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { useI18n } from "@/lib/i18n";
 
 interface FileCardProps {
   href: string;
@@ -20,37 +21,38 @@ interface FileCardProps {
 }
 
 export function FileCard({ href, filename, isExternal = false }: FileCardProps) {
+  const { t } = useI18n();
   const extMatch = href.match(/\.([a-zA-Z0-9]+)(?:[\?#]|$)/);
   const extension = extMatch ? extMatch[1].toUpperCase() : "FILE";
 
   let Icon = FileIcon;
-  let typeLabel = "Document";
+  let typeLabel = t("fileType.document");
 
   if (["XLSX", "XLS", "CSV"].includes(extension)) {
     Icon = FileSpreadsheetIcon;
-    typeLabel = "Spreadsheet";
+    typeLabel = t("fileType.spreadsheet");
   } else if (["PPT", "PPTX", "PPS", "PPSX"].includes(extension)) {
     Icon = PresentationIcon;
-    typeLabel = "Presentation";
+    typeLabel = t("fileType.presentation");
   } else if (["PNG", "JPG", "JPEG", "GIF", "WEBP", "BMP", "SVG", "HEIC"].includes(extension)) {
     Icon = FileImageIcon;
-    typeLabel = "Image";
+    typeLabel = t("fileType.image");
   } else if (["MP3", "WAV", "OGG", "M4A", "AAC", "FLAC"].includes(extension)) {
     Icon = FileAudioIcon;
-    typeLabel = "Audio";
+    typeLabel = t("fileType.audio");
   } else if (["MP4", "MOV", "WEBM", "AVI", "MKV", "M4V"].includes(extension)) {
     Icon = FileVideoIcon;
-    typeLabel = "Video";
+    typeLabel = t("fileType.video");
   } else if (["ZIP", "TAR", "GZ", "RAR", "7Z"].includes(extension)) {
     Icon = FileArchiveIcon;
-    typeLabel = "Archive";
+    typeLabel = t("fileType.archive");
   } else if (["PDF"].includes(extension)) {
-    typeLabel = "PDF Document";
+    typeLabel = t("fileType.pdf");
   } else if (["DOC", "DOCX", "TXT", "MD", "GO", "JS", "TS", "JSON", "YAML", "YML", "XML", "HTML", "CSS", "SCSS", "SQL", "PY", "RB", "JAVA", "C", "CPP", "RS"].includes(extension)) {
     Icon = FileTextIcon;
-    if (["GO", "JS", "TS", "JSON"].includes(extension)) typeLabel = "Code Text";
+    if (["GO", "JS", "TS", "JSON"].includes(extension)) typeLabel = t("fileType.code");
   } else if (extension === "FILE") {
-    typeLabel = "Unknown File";
+    typeLabel = t("fileType.unknown");
   }
 
   const isSameOrigin = !isExternal && !href.startsWith("http");

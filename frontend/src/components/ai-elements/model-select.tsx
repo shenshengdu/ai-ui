@@ -11,6 +11,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatProviderSelectLabel } from "@/lib/api/providers";
 import { getModelTags } from "@/lib/model-tags";
+import { useI18n } from "@/lib/i18n";
 
 export interface ModelOption {
   id: string;
@@ -45,7 +46,7 @@ export const ModelSelect = ({
   value,
   onChange,
   placeholder,
-  emptyMessage = "No models available",
+  emptyMessage,
   helperMessage,
   loading = false,
   disabled = false,
@@ -59,16 +60,18 @@ export const ModelSelect = ({
   renderValue,
   align,
 }: ModelSelectProps) => {
+  const { t } = useI18n();
+  const emptyText = emptyMessage ?? t("models.noModels");
   const selectValue =
     typeof value === "string" && value.length > 0 ? value : undefined;
 
   const computedPlaceholder =
     placeholder ??
     (loading
-      ? "Loading models..."
+      ? t("header.loadingModels")
       : models.length === 0
-        ? emptyMessage
-        : "Select a model");
+        ? emptyText
+        : t("header.selectModel"));
 
   const variantStyles: Record<
     NonNullable<ModelSelectProps["variant"]>,
@@ -119,11 +122,11 @@ export const ModelSelect = ({
         {loading ? (
           <div className="flex items-center justify-center gap-2 px-3 py-6 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
-            Loading models...
+            {t("header.loadingModels")}
           </div>
         ) : models.length === 0 ? (
           <div className="px-3 py-6 text-center text-sm text-muted-foreground">
-            {emptyMessage}
+            {emptyText}
             {helperMessage && (
               <div className="mt-1 text-xs text-muted-foreground/80">
                 {helperMessage}
@@ -165,7 +168,9 @@ export const ModelSelect = ({
 
             {showCount && (
               <div className="border-t border-border/50 px-3 py-2 text-center text-xs text-muted-foreground">
-                {models.length} model{models.length === 1 ? "" : "s"} available
+                {t(models.length === 1 ? "models.countOne" : "models.countMany", {
+                  count: models.length,
+                })}
               </div>
             )}
           </>

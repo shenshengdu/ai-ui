@@ -100,6 +100,7 @@ import {
   downloadTextFile,
   safeFilename,
 } from "@/lib/export-conversation";
+import { useI18n, type MessageKey } from "@/lib/i18n";
 
 // Dynamic models are now loaded from providers via useModels hook
 
@@ -143,30 +144,30 @@ export type ChatInterfaceHandle = {
 };
 
 /** Prompt starters shown on an empty chat (ChatGPT-style chips). */
-const SUGGESTIONS: { label: string; prompt: string; icon: ReactNode }[] = [
+const SUGGESTIONS: { label: MessageKey; prompt: MessageKey; icon: ReactNode }[] = [
   {
-    label: "Summarize text",
-    prompt: "Summarize the following text in a few bullet points:\n\n",
+    label: "suggest.summarize",
+    prompt: "suggest.summarizePrompt",
     icon: <FileTextIcon className="size-4 text-orange-500" />,
   },
   {
-    label: "Help me write",
-    prompt: "Help me write ",
+    label: "suggest.write",
+    prompt: "suggest.writePrompt",
     icon: <PenLineIcon className="size-4 text-violet-500" />,
   },
   {
-    label: "Brainstorm",
-    prompt: "Brainstorm ideas for ",
+    label: "suggest.brainstorm",
+    prompt: "suggest.brainstormPrompt",
     icon: <LightbulbIcon className="size-4 text-yellow-500" />,
   },
   {
-    label: "Code",
-    prompt: "Explain what this code does and suggest improvements:\n\n",
+    label: "suggest.code",
+    prompt: "suggest.codePrompt",
     icon: <CodeIcon className="size-4 text-sky-500" />,
   },
   {
-    label: "Make a plan",
-    prompt: "Make a step-by-step plan for ",
+    label: "suggest.plan",
+    prompt: "suggest.planPrompt",
     icon: <ListChecksIcon className="size-4 text-emerald-500" />,
   },
 ];
@@ -213,6 +214,7 @@ const PromptArea = memo(
     },
     ref,
   ) {
+    const { t } = useI18n();
     const [isInputEmpty, setIsInputEmpty] = useState(true);
     const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
     const [pendingFileNames, setPendingFileNames] = useState<string[]>([]);
@@ -269,7 +271,7 @@ const PromptArea = memo(
             const errorMessage =
               error instanceof FileUploadError
                 ? error.message
-                : "Failed to upload file";
+                : t("composer.uploadFailed");
             setUploadError(errorMessage);
           }
           // Remove this file from pending regardless of success/failure
@@ -279,7 +281,7 @@ const PromptArea = memo(
           });
         }
       },
-      [hasPendingMessages],
+      [hasPendingMessages, t],
     );
 
     const handlePickLocalFiles = useCallback(
@@ -360,7 +362,7 @@ const PromptArea = memo(
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">{name}</div>
-                      <div className="text-xs text-muted-foreground">Uploading...</div>
+                      <div className="text-xs text-muted-foreground">{t("composer.uploading")}</div>
                     </div>
                   </div>
                 ))}
@@ -371,7 +373,12 @@ const PromptArea = memo(
             <div className="px-4 pt-3">
               <div className="flex items-center gap-2 text-destructive text-sm">
                 <AlertCircleIcon size={16} />
-                <span>{uploadError || dictation.error}</span>
+                <span>
+                  {uploadError ||
+                    (dictation.error === "not-allowed"
+                      ? t("composer.micDenied")
+                      : t("composer.voiceError", { error: dictation.error ?? "" }))}
+                </span>
                 <button
                   type="button"
                   onClick={() => {
@@ -415,11 +422,11 @@ const PromptArea = memo(
                     variant="ghost"
                     disabled={hasPendingMessages || isDisabled}
                     className="size-9 text-foreground/80 hover:bg-accent"
-                    aria-label="Add photos and files"
+                    aria-label={t("composer.addFiles")}
                     title={
                       !isAuthenticated
-                        ? "Sign in to attach files"
-                        : "Add photos and files"
+                        ? t("composer.signInToAttach")
+                        : t("composer.addFiles")
                     }
                   >
                     <Plus className="size-5" />
@@ -430,17 +437,17 @@ const PromptArea = memo(
                     onSelect={() => imageInputRef.current?.click()}
                   >
                     <ImageIcon />
-                    Add photos
+                    {t("composer.addPhotos")}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onSelect={() => fileInputRef.current?.click()}
                   >
                     <FileIcon />
-                    Add files
+                    {t("composer.addFilesItem")}
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setFileManagerOpen(true)}>
                     <FolderOpen />
-                    Choose from library
+                    {t("composer.library")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -452,8 +459,8 @@ const PromptArea = memo(
                   onClick={dictation.toggle}
                   disabled={isDisabled}
                   aria-pressed={dictation.isListening}
-                  aria-label={dictation.isListening ? "Stop dictation" : "Dictate"}
-                  title={dictation.isListening ? "Stop dictation" : "Dictate"}
+                  aria-label={dictation.isListening ? t("composer.stopDictation") : t("composer.dictate")}
+                  title={dictation.isListening ? t("composer.stopDictation") : t("composer.dictate")}
                   className={cn(
                     "size-9 text-foreground/80 hover:bg-accent",
                     dictation.isListening &&
@@ -479,6 +486,7 @@ const PromptArea = memo(
                     : undefined
               }
               onStop={onStop}
+              aria-label={hasPendingMessages ? t("composer.stop") : t("composer.send")}
             />
             </div>
           </PromptInputToolbar>
@@ -513,6 +521,7 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
   onRequestDeleteConversation,
   banner,
 }, ref) {
+  const { t } = useI18n();
   const isComposerDisabled = isAuthChecking || !isAuthenticated;
   const [isDragOver, setIsDragOver] = useState(false);
   const [replySelection, setReplySelection] = useState<{
@@ -1187,12 +1196,12 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
   );
 
   const handleExport = useCallback(() => {
-    const title = currentConversation?.title || "Chat";
+    const title = currentConversation?.title || t("sidebar.untitled");
     downloadTextFile(
       safeFilename(title),
       conversationToMarkdown(title, messages),
     );
-  }, [currentConversation?.title, messages]);
+  }, [currentConversation?.title, messages, t]);
 
   const renderMessageActions = (message: FrontendMessage, isLast: boolean) => {
     // ChatGPT shows nothing while a response is streaming.
@@ -1207,11 +1216,11 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
 
     const copyButton = (
       <Action
-        tooltip={isCopied ? "Copied" : message.error ? "Copy error" : "Copy"}
+        tooltip={isCopied ? t("message.copied") : message.error ? t("message.copyError") : t("message.copy")}
         onClick={() => {
           copyMessage(
             message.error ? null : message.id,
-            message.error ? message.error || "Error occurred" : message.content,
+            message.error ? message.error || t("message.unknownError") : message.content,
           );
           flashCopied(message.id);
         }}
@@ -1234,7 +1243,7 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
         >
           {copyButton}
           <Action
-            tooltip="Edit message"
+            tooltip={t("message.edit")}
             onClick={() => setEditingMessageId(message.id)}
             disabled={updatingMessageId === message.id}
           >
@@ -1281,12 +1290,12 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
           <Action
             tooltip={
               ttsErrorMessageId === message.id
-                ? "Read aloud failed — check TTS model in Settings → Media"
+                ? t("message.readAloudFailed")
                 : speakingMessageId === message.id
-                  ? "Stop reading"
+                  ? t("message.stopReading")
                   : ttsLoadingMessageId === message.id
-                    ? "Loading audio…"
-                    : "Read aloud"
+                    ? t("message.loadingAudio")
+                    : t("message.readAloud")
             }
             onClick={() => handleReadAloud(message)}
             disabled={
@@ -1316,8 +1325,8 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
             <Button
               variant="ghost"
               size="sm"
-              aria-label="Regenerate"
-              title={message.error ? "Retry" : "Try again"}
+              aria-label={t("message.regenerate")}
+              title={message.error ? t("common.retry") : t("message.tryAgain")}
               className={cn(
                 "h-8 gap-0.5 rounded-lg px-1.5 text-muted-foreground hover:text-foreground",
                 message.error && "text-destructive hover:text-destructive",
@@ -1334,7 +1343,7 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
           <DropdownMenuContent align="start" className="w-64">
             <DropdownMenuItem onSelect={() => handleRetryMessage(message.id)}>
               <RotateCcwIcon />
-              <span className="flex-1">Try again</span>
+              <span className="flex-1">{t("message.tryAgain")}</span>
               <span className="max-w-24 truncate text-xs text-muted-foreground">
                 {currentModelName}
               </span>
@@ -1343,7 +1352,7 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuLabel className="px-2.5 py-1 text-xs font-medium">
-                  Retry with another model
+                  {t("message.retryOtherModel")}
                 </DropdownMenuLabel>
                 <div className="max-h-60 overflow-y-auto">
                   {models
@@ -1380,7 +1389,7 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
             <Button
               variant="ghost"
               size="icon"
-              aria-label="More actions"
+              aria-label={t("message.moreActions")}
               className="size-8 rounded-lg text-muted-foreground hover:text-foreground"
             >
               <MoreHorizontalIcon className="size-[18px]" />
@@ -1393,24 +1402,24 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
                 disabled={updatingMessageId === message.id}
               >
                 <PencilIcon />
-                Edit response
+                {t("message.editResponse")}
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
             <div className="space-y-1 px-2.5 py-1.5 text-xs text-muted-foreground">
               <div className="truncate font-medium text-foreground/80">
-                {message.model || "Model unknown"}
+                {message.model || t("message.modelUnknown")}
               </div>
               <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 tabular-nums">
-                <span>Tokens</span>
+                <span>{t("message.tokens")}</span>
                 <span className="text-right">
                   {message.tokenCount ? formatCompact(message.tokenCount) : "—"}
                 </span>
-                <span>Context</span>
+                <span>{t("message.context")}</span>
                 <span className="text-right">
                   {message.contextSize ? formatCompact(message.contextSize) : "—"}
                 </span>
-                <span>Speed</span>
+                <span>{t("message.speed")}</span>
                 <span className="text-right">
                   {message.speed !== undefined ? `${message.speed} t/s` : "—"}
                 </span>
@@ -1429,11 +1438,11 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
           <div className="flex items-center gap-2 text-sm font-medium text-destructive">
             <AlertCircleIcon className="size-4 flex-shrink-0" />
             {message.role === "assistant"
-              ? "Something went wrong"
-              : "Failed to send message"}
+              ? t("message.somethingWrong")
+              : t("message.sendFailed")}
           </div>
           <div className="text-sm text-destructive/80 break-words">
-            {message.error || "An unknown error occurred"}
+            {message.error || t("message.unknownError")}
           </div>
         </div>
       );
@@ -1448,7 +1457,7 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
       !(message.toolCalls && message.toolCalls.length > 0)
     ) {
       return (
-        <div className="flex h-7 items-center" aria-label="Thinking">
+        <div className="flex h-7 items-center" aria-label={t("message.thinking")}>
           <span className="size-3.5 rounded-full bg-foreground animate-thinking" />
         </div>
       );
@@ -1483,7 +1492,7 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
           onClick={() => setEditingMessageId(null)}
           disabled={updatingMessageId === message.id}
         >
-          Cancel
+          {t("common.cancel")}
         </Button>
         <Button
           size="sm"
@@ -1491,7 +1500,7 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
           onClick={() => editableMessageRefs.current[message.id]?.triggerSave()}
           disabled={updatingMessageId === message.id}
         >
-          {updatingMessageId === message.id ? "Saving…" : "Save"}
+          {updatingMessageId === message.id ? t("common.saving") : t("common.save")}
         </Button>
       </div>
     </div>
@@ -1609,7 +1618,7 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
           <div className="rounded-full bg-secondary p-4">
             <UploadIcon className="size-6" />
           </div>
-          <span className="text-sm font-medium">Drop files to attach</span>
+          <span className="text-sm font-medium">{t("composer.dropFiles")}</span>
         </div>
       </div>
 
@@ -1622,7 +1631,7 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
               size="icon"
               onClick={onToggleSidebar}
               className="size-9 rounded-lg md:hidden"
-              aria-label="Open sidebar"
+              aria-label={t("sidebar.openSidebar")}
             >
               <MenuIcon className="size-5" />
             </Button>
@@ -1633,21 +1642,21 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
             onChange={handleModelChange}
             loading={modelsLoading}
             disabled={settingsLoading || isComposerDisabled}
-            helperMessage="Add AI providers in settings"
+            helperMessage={t("models.addProvidersHint")}
             variant="ghost"
             showCount={models.length > 0}
             align="start"
             placeholder={
               modelsLoading
-                ? "Loading models..."
+                ? t("header.loadingModels")
                 : models.length === 0
-                  ? "No models"
-                  : "Select a model"
+                  ? t("header.noModels")
+                  : t("header.selectModel")
             }
             renderValue={(m) => (
               <span className="truncate text-lg font-medium">{m.name}</span>
             )}
-            triggerAriaLabel="Model selector"
+            triggerAriaLabel={t("header.modelSelector")}
             triggerClassName={cn(
               "h-10 max-w-[60vw] gap-1 rounded-xl !px-3 text-lg font-medium text-foreground/90 hover:!bg-accent data-[state=open]:!bg-accent",
               "[&>svg]:size-4 [&>svg]:opacity-60",
@@ -1673,7 +1682,7 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
                   variant="ghost"
                   size="icon"
                   className="size-9 rounded-lg"
-                  aria-label="Conversation options"
+                  aria-label={t("header.conversationOptions")}
                 >
                   <MoreHorizontalIcon className="size-5" />
                 </Button>
@@ -1681,7 +1690,7 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
               <DropdownMenuContent align="end" className="min-w-52">
                 <DropdownMenuItem onSelect={handleExport}>
                   <DownloadIcon />
-                  Export as Markdown
+                  {t("header.exportMarkdown")}
                 </DropdownMenuItem>
                 {onRequestDeleteConversation && (
                   <>
@@ -1693,7 +1702,7 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
                       className="text-destructive focus:text-destructive [&_svg]:!text-destructive"
                     >
                       <TrashIcon />
-                      Delete
+                      {t("common.delete")}
                     </DropdownMenuItem>
                   </>
                 )}
@@ -1707,7 +1716,7 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
               onClick={onNewChat}
               disabled={isComposerDisabled}
               className="size-9 rounded-lg md:hidden"
-              aria-label="New chat"
+              aria-label={t("sidebar.newChat")}
             >
               <SquarePenIcon className="size-5" />
             </Button>
@@ -1766,7 +1775,7 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
             }}
           >
             <ReplyIcon className="size-3.5" />
-            Ask about this
+            {t("message.askAbout")}
           </button>
         )}
         <ConversationScrollButton />
@@ -1775,7 +1784,7 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
       <PromptArea
         ref={promptAreaRef}
         onSend={handleSend}
-        placeholder={isAuthenticated ? "Ask anything" : "Sign in to start chatting"}
+        placeholder={isAuthenticated ? t("composer.placeholder") : t("composer.placeholderGuest")}
         isDisabled={isComposerDisabled}
         models={models}
         model={model}
@@ -1795,30 +1804,30 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
                   key={sgt.label}
                   type="button"
                   onClick={() => {
-                    promptAreaRef.current?.insertText(sgt.prompt);
+                    promptAreaRef.current?.insertText(t(sgt.prompt));
                     promptAreaRef.current?.focus();
                   }}
                   className="flex h-10 items-center gap-2 rounded-full border border-border px-4 text-sm text-foreground/80 hover:bg-accent animate-slide-up"
                 >
                   {sgt.icon}
-                  {sgt.label}
+                  {t(sgt.label)}
                 </button>
               ))}
             </div>
           )}
           {isAuthenticated && stats && stats.totalConversations > 0 && (
             <p className="mt-6 text-xs tabular-nums text-muted-foreground/80 max-md:hidden">
-              {formatCompact(stats.totalTokens + stats.totalInputTokens)} tokens
-              {" · "}
-              {formatCompact(stats.totalConversations)} chats
-              {" · "}
-              {formatCompact(stats.totalMessages)} replies
+              {t("welcome.stats", {
+                tokens: formatCompact(stats.totalTokens + stats.totalInputTokens),
+                chats: formatCompact(stats.totalConversations),
+                replies: formatCompact(stats.totalMessages),
+              })}
             </p>
           )}
         </div>
       ) : (
         <p className="px-4 py-2 text-center text-xs text-muted-foreground">
-          AI can make mistakes. Check important info.
+          {t("composer.disclaimer")}
         </p>
       )}
     </div>

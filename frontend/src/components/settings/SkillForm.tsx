@@ -13,6 +13,7 @@ import {
 import { AlertCircle, Loader2, Upload } from "lucide-react";
 import { SkillRequest, SkillResponse } from "@/lib/api/types";
 import { getSkill } from "@/lib/api/skills";
+import { useI18n } from "@/lib/i18n";
 
 interface SkillFormProps {
   open: boolean;
@@ -34,6 +35,7 @@ export const SkillForm = ({
   skill,
   readOnly = false,
 }: SkillFormProps) => {
+  const { t } = useI18n();
   const [formData, setFormData] = useState<SkillRequest>({
     id: "",
     name: "",
@@ -68,7 +70,7 @@ export const SkillForm = ({
           });
         })
         .catch(() => {
-          setError("Failed to load skill content");
+          setError(t("skillForm.loadFailed"));
           setFormData({
             id: skill.id,
             name: skill.name,
@@ -89,7 +91,7 @@ export const SkillForm = ({
     if (!file) return;
 
     if (!file.name.endsWith(".md") && file.type !== "text/markdown") {
-      setError("Please select a markdown (.md) file");
+      setError(t("skillForm.mdOnly"));
       return;
     }
 
@@ -115,12 +117,12 @@ export const SkillForm = ({
     setError(null);
 
     if (!formData.name.trim()) {
-      setError("Name is required");
+      setError(t("skillForm.nameRequired"));
       return;
     }
 
     if (!formData.content.trim()) {
-      setError("Content cannot be empty");
+      setError(t("skillForm.contentRequired"));
       return;
     }
 
@@ -129,7 +131,7 @@ export const SkillForm = ({
       await onSubmit(formData);
       onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save skill");
+      setError(err instanceof Error ? err.message : t("skillForm.saveFailed"));
     } finally {
       setIsSubmitting(false);
     }
@@ -154,7 +156,7 @@ export const SkillForm = ({
 
           <div className="px-6 space-y-4 flex-shrink-0">
             <div className="space-y-1.5">
-              <Label htmlFor="skill-name">Name</Label>
+              <Label htmlFor="skill-name">{t("common.name")}</Label>
               <Input
                 id="skill-name"
                 type="text"
@@ -169,10 +171,10 @@ export const SkillForm = ({
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="skill-description">Description</Label>
+              <Label htmlFor="skill-description">{t("common.description")}</Label>
               <Textarea
                 id="skill-description"
-                placeholder="Short description of what this skill teaches (shown to the model)..."
+                placeholder={t("skillForm.descriptionPlaceholder")}
                 value={formData.description}
                 onChange={(e) =>
                   setFormData((prev) => ({
@@ -186,7 +188,7 @@ export const SkillForm = ({
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="skill-content">Content</Label>
+              <Label htmlFor="skill-content">{t("skillForm.content")}</Label>
             </div>
           </div>
 
@@ -194,12 +196,12 @@ export const SkillForm = ({
             {isLoadingContent ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Loading content...</span>
+                <span>{t("skillForm.loadingContent")}</span>
               </div>
             ) : (
               <Textarea
                 id="skill-content"
-                placeholder="Paste or write the skill markdown here..."
+                placeholder={t("skillForm.contentPlaceholder")}
                 value={formData.content}
                 onChange={(e) =>
                   setFormData((prev) => ({
@@ -225,7 +227,7 @@ export const SkillForm = ({
                   className="gap-2"
                 >
                   <Upload className="h-4 w-4" />
-                  {fileName ? "Replace" : "Upload"}
+                  {fileName ? t("skillForm.replace") : t("skillForm.upload")}
                 </Button>
                 <input
                   ref={fileInputRef}
@@ -248,7 +250,7 @@ export const SkillForm = ({
             )}
             {readOnly && (
               <Button type="button" onClick={() => onOpenChange(false)}>
-                Close
+                {t("common.close")}
               </Button>
             )}
           </DialogFooter>

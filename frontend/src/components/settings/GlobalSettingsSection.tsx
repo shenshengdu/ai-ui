@@ -13,8 +13,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSettingsData } from "@/hooks/useSettingsData";
+import { useI18n } from "@/lib/i18n";
 
 export const GlobalSettingsSection = () => {
+  const { t } = useI18n();
   const { data, models, updateSettingsLocal, saveSettings } = useSettingsData();
 
   const [hasChanges, setHasChanges] = useState(false);
@@ -99,13 +101,13 @@ export const GlobalSettingsSection = () => {
     <div className="space-y-8 max-w-2xl">
       <h3 className="text-lg font-medium flex items-center gap-2">
         <Settings className="h-5 w-5" />
-        General Settings
+        {t("general.title")}
       </h3>
 
       <div className="space-y-4">
         <div className="flex justify-between items-center mb-0 pb-2">
           <Label htmlFor="default-model" className="text-nowrap">
-            Default Model
+            {t("general.defaultModel")}
           </Label>
           <ModelSelect
             models={enabledModels}
@@ -113,10 +115,10 @@ export const GlobalSettingsSection = () => {
             onChange={(value) => handleChange("defaultModel", value)}
             loading={false}
             disabled={isSaving}
-            helperMessage="Add AI providers in the Providers tab"
+            helperMessage={t("models.addProvidersTabHint")}
             size="sm"
             triggerId="default-model"
-            triggerAriaLabel="Default model"
+            triggerAriaLabel={t("general.defaultModel")}
             triggerClassName="max-sm:max-w-[180px] max-sm:mr-4"
             contentClassName="max-h-60"
             showCount={enabledModels.length > 0}
@@ -125,7 +127,7 @@ export const GlobalSettingsSection = () => {
 
         <div className="flex justify-between items-center !my-0 pb-2">
           <Label htmlFor="reasoning-effort" className="text-nowrap">
-            Reasoning Effort
+            {t("general.reasoningEffort")}
           </Label>
           <Select
             value={local.reasoningEffort}
@@ -139,18 +141,18 @@ export const GlobalSettingsSection = () => {
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="rounded-xl min-w-[120px] border border-border/70 p-1 shadow-xl">
-              <SelectItem value="disabled">Disabled</SelectItem>
-              <SelectItem value="none">None</SelectItem>
-              <SelectItem value="low">Low</SelectItem>
-              <SelectItem value="medium">Medium</SelectItem>
-              <SelectItem value="high">High</SelectItem>
+              <SelectItem value="disabled">{t("general.effort.disabled")}</SelectItem>
+              <SelectItem value="none">{t("general.effort.none")}</SelectItem>
+              <SelectItem value="low">{t("general.effort.low")}</SelectItem>
+              <SelectItem value="medium">{t("general.effort.medium")}</SelectItem>
+              <SelectItem value="high">{t("general.effort.high")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
         <div className="border-b border-border flex justify-between items-center !my-0 pb-2">
           <Label htmlFor="enter-behavior" className="text-nowrap">
-            Enter Key Action
+            {t("general.enterKey")}
           </Label>
           <Select
             value={local.enterBehavior}
@@ -164,17 +166,17 @@ export const GlobalSettingsSection = () => {
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="rounded-xl min-w-[140px] border border-border/70 p-1 shadow-xl">
-              <SelectItem value="send">Send</SelectItem>
-              <SelectItem value="newline">New Line</SelectItem>
+              <SelectItem value="send">{t("general.enterSend")}</SelectItem>
+              <SelectItem value="newline">{t("general.enterNewline")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
         <div className="space-y-4 pt-2">
-          <Label htmlFor="system-prompt">System Prompt</Label>
+          <Label htmlFor="system-prompt">{t("general.systemPrompt")}</Label>
           <div className="flex items-center justify-between pt-2">
             <div>
-              <Label className="!mb-0">Append current date</Label>
+              <Label className="!mb-0">{t("general.appendDate")}</Label>
             </div>
             <Switch
               className="mx-1"
@@ -190,7 +192,7 @@ export const GlobalSettingsSection = () => {
           </div>
           <div className="flex items-center justify-between pt-2">
             <div>
-              <Label className="!mb-0">Append platform instructions</Label>
+              <Label className="!mb-0">{t("general.appendPlatform")}</Label>
             </div>
             <Switch
               className="mx-1"
@@ -208,7 +210,7 @@ export const GlobalSettingsSection = () => {
           </div>
           <Textarea
             id="system-prompt"
-            placeholder="You are a helpful AI assistant. Provide clear, accurate, and helpful responses to user questions."
+            placeholder={t("general.systemPromptPlaceholder")}
             value={local.systemPrompt}
             onChange={(e) => handleChange("systemPrompt", e.target.value)}
             className="min-h-[140px] text-sm resize-none !bg-secondary/50 rounded-xl border-border/80 focus-visible:border-border"
@@ -225,7 +227,7 @@ export const GlobalSettingsSection = () => {
               className="gap-2"
             >
               <Save className="h-4 w-4" />
-              {isSaving ? "Saving..." : "Save Changes"}
+              {isSaving ? t("common.saving") : t("common.saveChanges")}
             </Button>
             <Button
               onClick={handleReset}
@@ -235,7 +237,7 @@ export const GlobalSettingsSection = () => {
               className="gap-2"
             >
               <RotateCcw className="h-4 w-4" />
-              Reset
+              {t("common.reset")}
             </Button>
           </div>
         )}

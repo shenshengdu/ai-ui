@@ -11,6 +11,7 @@ import type { ComponentProps } from "react";
 import { createContext, memo, useContext, useEffect, useState } from "react";
 import { cn } from "@/lib/utils.ts";
 import { Response } from "./response.tsx";
+import { useI18n } from "@/lib/i18n";
 
 type ReasoningContextValue = {
   isStreaming: boolean;
@@ -98,11 +99,12 @@ export type ReasoningTriggerProps = ComponentProps<
 export const ReasoningTrigger = memo(
   ({
     className,
-    title = "Reasoning",
+    title: _title,
     children,
     ...props
   }: ReasoningTriggerProps) => {
     const { isStreaming, isOpen, duration } = useReasoning();
+    const { t } = useI18n();
 
     return (
       <CollapsibleTrigger
@@ -116,11 +118,11 @@ export const ReasoningTrigger = memo(
           <>
             <BrainIcon className="size-4" />
             {isStreaming ? (
-              <p>Thinking...</p>
+              <p>{t("reasoning.thinking")}</p>
             ) : duration === 0 ? (
-              <p>Thought for a while</p>
+              <p>{t("reasoning.thoughtWhile")}</p>
             ) : (
-              <p>Thought for {duration} seconds</p>
+              <p>{t("reasoning.thoughtSeconds", { seconds: duration ?? 0 })}</p>
             )}
             <ChevronDownIcon
               className={cn(

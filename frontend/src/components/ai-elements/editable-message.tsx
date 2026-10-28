@@ -10,6 +10,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Response } from "@/components/ai-elements/response";
 import { cn } from "@/lib/utils.ts";
+import { useI18n } from "@/lib/i18n";
 
 interface EditableMessageProps {
   content: string;
@@ -42,6 +43,7 @@ export const EditableMessage = forwardRef<
     },
     ref,
   ) => {
+    const { t } = useI18n();
     const [editContent, setEditContent] = useState(content);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const contentDivRef = useRef<HTMLDivElement>(null);
@@ -103,7 +105,7 @@ export const EditableMessage = forwardRef<
             value={editContent}
             onChange={(e) => setEditContent(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Enter your message..."
+            placeholder={t("message.editPlaceholder")}
             className="col-start-1 row-start-1 min-h-0 resize-none border-0 shadow-none focus-visible:ring-0 bg-transparent text-inherit overflow-hidden h-full w-full"
             style={{ textAlign: "inherit" }}
             disabled={disabled}

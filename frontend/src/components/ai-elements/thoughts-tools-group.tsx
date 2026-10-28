@@ -36,6 +36,7 @@ import {
 import { cn } from "@/lib/utils";
 import { runBrowserSandbox } from "@/lib/sandbox/runner";
 import { Badge } from "../ui/badge";
+import { useI18n } from "@/lib/i18n";
 
 type SettingsDataLike = {
   tools: ToolDefinition[];
@@ -207,6 +208,7 @@ export const ThoughtsToolsGroup = ({
     (toolState) => toolState === "awaiting-approval",
   );
 
+  const { t } = useI18n();
   const [isOpen, setIsOpen] = useState(() => hasAwaitingApproval);
   const previousAwaitingApprovalRef = useRef(hasAwaitingApproval);
 
@@ -247,11 +249,11 @@ export const ThoughtsToolsGroup = ({
 
   const statusText = isStreaming
     ? displayToolName
-      ? `Calling ${displayToolName}...`
+      ? t("tools.calling", { name: displayToolName })
       : hasReasoning
-        ? "Thinking..."
-        : "Thoughts and tools"
-    : "Thoughts and tools";
+        ? t("reasoning.thinking")
+        : t("tools.thoughtsAndTools")
+    : t("tools.thoughtsAndTools");
 
   return (
     <Collapsible
@@ -297,7 +299,7 @@ export const ThoughtsToolsGroup = ({
                 variant="outline"
               >
                 <ClockIcon className="mr-1 size-3 text-orange-500" />
-                Awaiting Approval
+                {t("tools.awaitingApproval")}
               </Badge>
             )}
           </div>

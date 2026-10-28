@@ -17,8 +17,10 @@ import { FrontendProvider, ProviderRequest } from "@/lib/api/types";
 import { useSettingsData } from "@/hooks/useSettingsData";
 import { useModelsContext } from "@/hooks/useModelsContext";
 import { useAuth } from "@/hooks/useAuth";
+import { useI18n } from "@/lib/i18n";
 
 export const ProvidersSection = () => {
+  const { t } = useI18n();
   const {
     data,
     addProvider,
@@ -53,7 +55,7 @@ export const ProvidersSection = () => {
   };
 
   const handleDeleteProvider = async (id: string) => {
-    if (confirm("Are you sure you want to delete this provider?")) {
+    if (confirm(t("providers.confirmDelete"))) {
       await deleteProvider(id);
     }
   };
@@ -111,7 +113,7 @@ export const ProvidersSection = () => {
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-medium flex items-center gap-2">
           <Database className="h-5 w-5" />
-          AI Providers
+          {t("providers.title")}
         </h3>
         <div className="flex items-center gap-2">
           <Button
@@ -131,14 +133,14 @@ export const ProvidersSection = () => {
             variant="outline"
             size="sm"
             disabled={connectingChatGPT}
-            title="Add another ChatGPT account as a provider"
+            title={t("providers.addChatGPTTitle")}
           >
             {connectingChatGPT ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <ChatGPTIcon className="h-4 w-4" />
             )}
-            <span className="hidden sm:inline">Add ChatGPT</span>
+            <span className="hidden sm:inline">{t("providers.addChatGPT")}</span>
           </Button>
           <Button
             onClick={() => setShowAddForm(true)}
@@ -146,7 +148,7 @@ export const ProvidersSection = () => {
             size="sm"
           >
             <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Add Provider</span>
+            <span className="hidden sm:inline">{t("providers.addProvider")}</span>
           </Button>
         </div>
       </div>
@@ -154,7 +156,7 @@ export const ProvidersSection = () => {
       {data.providers.length === 0 ? (
         <Card className="p-6 text-center bg-transparent border-dashed">
           <div className="space-y-3">
-            <p className="text-muted-foreground">No providers configured</p>
+            <p className="text-muted-foreground">{t("providers.empty")}</p>
             <div className="flex flex-wrap items-center justify-center gap-2">
               <Button
                 onClick={handleConnectChatGPT}
@@ -167,7 +169,7 @@ export const ProvidersSection = () => {
                 ) : (
                   <ChatGPTIcon className="h-4 w-4" />
                 )}
-                Add ChatGPT
+                {t("providers.addChatGPT")}
               </Button>
               <Button
                 onClick={() => setShowAddForm(true)}
@@ -175,7 +177,7 @@ export const ProvidersSection = () => {
                 size="sm"
               >
                 <Plus className="h-4 w-4" />
-                Add API Provider
+                {t("providers.addApiProvider")}
               </Button>
             </div>
           </div>
@@ -221,7 +223,7 @@ export const ProvidersSection = () => {
                         size="sm"
                         onClick={() => handleRefreshProviderModels(provider.id)}
                         disabled={refreshingProviders.has(provider.id)}
-                        title="Refresh models from provider"
+                        title={t("providers.refreshModels")}
                       >
                         {refreshingProviders.has(provider.id) ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -234,7 +236,7 @@ export const ProvidersSection = () => {
                           variant="ghost"
                           size="sm"
                           onClick={() => setEditingProvider(provider)}
-                          title="Edit provider"
+                          title={t("providers.edit")}
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
@@ -244,7 +246,7 @@ export const ProvidersSection = () => {
                         size="sm"
                         onClick={() => handleDeleteProvider(provider.id)}
                         className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
-                        title="Delete provider"
+                        title={t("providers.delete")}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -258,7 +260,7 @@ export const ProvidersSection = () => {
                       title={provider.baseUrl}
                     >
                       {provider.type === "chatgpt-oauth"
-                        ? "ChatGPT account (subscription)"
+                        ? t("providers.chatgptSubscription")
                         : provider.baseUrl}
                     </span>
                   </div>
@@ -277,7 +279,7 @@ export const ProvidersSection = () => {
                       ))}
                       {providerModels.length > 5 && (
                         <Badge variant="outline" className="text-xs">
-                          +{providerModels.length - 5} more
+                          {t("providers.more", { count: providerModels.length - 5 })}
                         </Badge>
                       )}
                     </div>
@@ -294,8 +296,8 @@ export const ProvidersSection = () => {
         open={showAddForm}
         onOpenChange={setShowAddForm}
         onSubmit={handleAddProvider}
-        title="Add AI Provider"
-        submitLabel="Add Provider"
+        title={t("providers.addTitle")}
+        submitLabel={t("providers.addProvider")}
       />
 
       {/* Edit Provider Form */}
@@ -304,8 +306,8 @@ export const ProvidersSection = () => {
         onOpenChange={(open) => !open && setEditingProvider(null)}
         onSubmit={handleEditProvider}
         provider={editingProvider}
-        title="Edit AI Provider"
-        submitLabel="Update Provider"
+        title={t("providers.editTitle")}
+        submitLabel={t("providers.updateProvider")}
       />
     </div>
   );

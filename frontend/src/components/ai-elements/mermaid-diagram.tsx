@@ -10,6 +10,7 @@ import {
 import { useEffect, useMemo, useState, type HTMLAttributes } from "react";
 import { Action } from "./actions";
 import { downloadTextFile, useCopyFeedback } from "./diagram-actions";
+import { useI18n } from "@/lib/i18n";
 
 type MermaidDiagramProps = HTMLAttributes<HTMLDivElement> & {
   code: unknown;
@@ -48,6 +49,7 @@ export function MermaidDiagram({
   className,
   ...props
 }: MermaidDiagramProps) {
+  const { t } = useI18n();
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [isDark, setIsDark] = useState(false);
@@ -174,8 +176,8 @@ export function MermaidDiagram({
           size="icon"
           onClick={copyRawCode}
           disabled={!normalizedCode || isCopying}
-          label="Copy Mermaid code"
-          tooltip="Copy Mermaid code"
+          label={t("diagram.copyMermaid")}
+          tooltip={t("diagram.copyMermaid")}
         >
           {isCopied ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
         </Action>
@@ -184,8 +186,8 @@ export function MermaidDiagram({
           size="icon"
           onClick={downloadSvg}
           disabled={!svg}
-          label="Save Mermaid as SVG"
-          tooltip="Save Mermaid as SVG"
+          label={t("diagram.saveMermaid")}
+          tooltip={t("diagram.saveMermaid")}
         >
           <DownloadIcon size={14} />
         </Action>

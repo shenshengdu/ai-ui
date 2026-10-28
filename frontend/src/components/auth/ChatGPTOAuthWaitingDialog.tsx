@@ -8,6 +8,7 @@ import {
 import { useAuth } from "@/hooks/useAuth.tsx";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
+import { useI18n } from "@/lib/i18n";
 
 const AppLogo = ({ className }: { className?: string }) => (
   <svg
@@ -58,6 +59,7 @@ export const ChatGPTOAuthWaitingDialog: React.FC = () => {
   const [url, setUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const { t } = useI18n();
 
   // Reset help UI when a new OAuth attempt starts/ends.
   useEffect(() => {
@@ -85,7 +87,7 @@ export const ChatGPTOAuthWaitingDialog: React.FC = () => {
       setUrl("");
     } catch (err) {
       setLocalError(
-        err instanceof Error ? err.message : "Failed to submit callback URL",
+        err instanceof Error ? err.message : t("auth.callbackFailed"),
       );
     } finally {
       setSubmitting(false);
@@ -106,7 +108,7 @@ export const ChatGPTOAuthWaitingDialog: React.FC = () => {
             <Loader2 className="size-5 animate-spin text-muted-foreground shrink-0" />
             <ChatGPTLogo className="text-foreground" />
           </div>
-          <DialogTitle>Waiting for ChatGPT</DialogTitle>
+          <DialogTitle>{t("auth.waitingChatGPT")}</DialogTitle>
         </DialogHeader>
 
         <div className="pt-5 space-y-0">
@@ -116,7 +118,7 @@ export const ChatGPTOAuthWaitingDialog: React.FC = () => {
               onClick={() => setHelpOpen((open) => !open)}
               className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-4 transition-colors"
             >
-              Having problems?
+              {t("auth.havingProblems")}
             </button>
           </div>
 
@@ -131,8 +133,7 @@ export const ChatGPTOAuthWaitingDialog: React.FC = () => {
             <div className="overflow-hidden">
               <div className="mt-3 space-y-2.5">
                 <p className="text-[11px] text-muted-foreground leading-relaxed text-center">
-                  Stuck or connection refuesed?
-                  try paste the redirect URL here.
+                  {t("auth.pasteRedirect")}
                 </p>
                 <form onSubmit={handleSubmit} className="space-y-2">
                   <input
@@ -153,7 +154,7 @@ export const ChatGPTOAuthWaitingDialog: React.FC = () => {
                     disabled={submitting || !url.trim()}
                     className="w-full px-3 py-1.5 text-xs rounded-xl border border-input bg-background hover:bg-muted/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {submitting ? "Verifying..." : "Submit"}
+                    {submitting ? t("auth.verifying") : t("common.submit")}
                   </button>
                 </form>
                 {localError && (

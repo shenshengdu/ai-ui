@@ -5,8 +5,10 @@ import { Check, Copy, Edit, KeyRound, Plus, Trash2 } from "lucide-react";
 import { SecretForm, secretRef } from "./SecretForm";
 import { SecretRequest, SecretResponse } from "@/lib/api/types";
 import { useSettingsData } from "@/hooks/useSettingsData";
+import { useI18n } from "@/lib/i18n";
 
 export const SecretsSection = () => {
+  const { t } = useI18n();
   const { data, addSecret, updateSecret, deleteSecret } = useSettingsData();
   const [showAddForm, setShowAddForm] = useState(false);
   const [editing, setEditing] = useState<SecretResponse | null>(null);
@@ -23,7 +25,7 @@ export const SecretsSection = () => {
   };
 
   const handleDelete = async (id: string, name: string) => {
-    if (confirm(`Delete secret "${name}"? This cannot be undone.`)) {
+    if (confirm(t("secrets.confirmDelete", { name }))) {
       await deleteSecret(id);
     }
   };
@@ -43,7 +45,7 @@ export const SecretsSection = () => {
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-medium flex items-center gap-2">
           <KeyRound className="h-5 w-5" />
-          Secrets
+          {t("secrets.title")}
         </h3>
         <Button
           onClick={() => setShowAddForm(true)}
@@ -51,33 +53,33 @@ export const SecretsSection = () => {
           size="sm"
         >
           <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline">Add Secret</span>
+          <span className="hidden sm:inline">{t("secrets.add")}</span>
         </Button>
       </div>
 
       <p className="text-sm text-muted-foreground">
-        Store tokens for tools like{" "}
+        {t("secrets.intro1")}
         <code className="text-xs bg-muted px-1 py-0.5 rounded">
           http_request
         </code>
-        . Tell the AI the name when needed; it uses{" "}
+        {t("secrets.intro2")}
         <code className="text-xs bg-muted px-1 py-0.5 rounded">
           $secrets.NAME$
         </code>
-        .
+        {t("secrets.intro3")}
       </p>
 
       {data.secrets.length === 0 ? (
         <Card className="p-6 text-center bg-transparent border-dashed">
           <div className="space-y-2">
-            <p className="text-muted-foreground">No secrets configured</p>
+            <p className="text-muted-foreground">{t("secrets.empty")}</p>
             <Button
               onClick={() => setShowAddForm(true)}
               variant="outline"
               size="sm"
             >
               <Plus className="h-4 w-4" />
-              Add Your First Secret
+              {t("secrets.addFirst")}
             </Button>
           </div>
         </Card>
@@ -96,7 +98,7 @@ export const SecretsSection = () => {
                   type="button"
                   onClick={() => copySecretRef(secret.id, secret.name)}
                   className="inline-flex items-center gap-1 max-w-full text-xs text-muted-foreground font-mono hover:text-foreground"
-                  title="Copy for chat"
+                  title={t("secrets.copyForChat")}
                 >
                   <span className="truncate">{secretRef(secret.name)}</span>
                   {copiedId === secret.id ? (
@@ -111,7 +113,7 @@ export const SecretsSection = () => {
                   variant="ghost"
                   size="icon"
                   onClick={() => setEditing(secret)}
-                  aria-label={`Edit ${secret.name}`}
+                  aria-label={t("secrets.editNamed", { name: secret.name })}
                 >
                   <Edit className="h-4 w-4" />
                 </Button>
@@ -119,7 +121,7 @@ export const SecretsSection = () => {
                   variant="ghost"
                   size="icon"
                   onClick={() => handleDelete(secret.id, secret.name)}
-                  aria-label={`Delete ${secret.name}`}
+                  aria-label={t("secrets.deleteNamed", { name: secret.name })}
                 >
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
@@ -133,8 +135,8 @@ export const SecretsSection = () => {
         open={showAddForm}
         onOpenChange={setShowAddForm}
         onSubmit={handleAdd}
-        title="Add Secret"
-        submitLabel="Save"
+        title={t("secrets.add")}
+        submitLabel={t("common.save")}
       />
       <SecretForm
         open={!!editing}
@@ -142,8 +144,8 @@ export const SecretsSection = () => {
           if (!open) setEditing(null);
         }}
         onSubmit={handleEdit}
-        title="Edit Secret"
-        submitLabel="Update"
+        title={t("secrets.editTitle")}
+        submitLabel={t("common.update")}
         secret={editing}
       />
     </div>

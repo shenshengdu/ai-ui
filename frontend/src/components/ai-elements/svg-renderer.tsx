@@ -11,6 +11,7 @@ import {
 import { useEffect, useMemo, useState, type HTMLAttributes } from "react";
 import { Action } from "./actions";
 import { downloadTextFile, useCopyFeedback } from "./diagram-actions";
+import { useI18n } from "@/lib/i18n";
 
 type SvgRendererProps = HTMLAttributes<HTMLDivElement> & {
   code: unknown;
@@ -69,6 +70,7 @@ function sanitizeSvg(svgCode: string): string {
 }
 
 export function SvgRenderer({ code, className, ...props }: SvgRendererProps) {
+  const { t } = useI18n();
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const { isCopied, isCopying, copyText } = useCopyFeedback(1800);
@@ -142,8 +144,8 @@ export function SvgRenderer({ code, className, ...props }: SvgRendererProps) {
           size="icon"
           onClick={copyRawCode}
           disabled={!normalizedCode || isCopying}
-          label="Copy SVG code"
-          tooltip="Copy SVG code"
+          label={t("diagram.copySvg")}
+          tooltip={t("diagram.copySvg")}
         >
           {isCopied ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
         </Action>
@@ -152,8 +154,8 @@ export function SvgRenderer({ code, className, ...props }: SvgRendererProps) {
           size="icon"
           onClick={downloadSvg}
           disabled={!svg}
-          label="Save SVG"
-          tooltip="Save SVG"
+          label={t("diagram.saveSvg")}
+          tooltip={t("diagram.saveSvg")}
         >
           <DownloadIcon size={14} />
         </Action>
