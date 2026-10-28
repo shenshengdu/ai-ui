@@ -18,6 +18,9 @@ export const getModelTags = (model: ModelTagModel): ModelTag[] => {
   if (
     id === "openrouter-ae88/openrouter/free" ||
     id.endsWith(":free") ||
+    // free-auto（任意服务商下名为 free-auto 的模型）
+    name === "free-auto" ||
+    id.endsWith("/free-auto") ||
     id === "openrouter-ae88/google/gemini-3.6-flash" ||
     id === "googleapis-836c/models/gemini-3.6-flash" ||
     id.includes("z-ai/glm-4.7-flash") ||
