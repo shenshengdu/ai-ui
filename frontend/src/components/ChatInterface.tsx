@@ -7,6 +7,7 @@ import {
   memo,
   forwardRef,
   useImperativeHandle,
+  type ReactNode,
 } from "react";
 import { cn } from "@/lib/utils";
 import { useModels } from "@/hooks/useModels";
@@ -20,7 +21,6 @@ import {
 import {
   PromptInput,
   PromptInputButton,
-  PromptInputModelSelect,
   PromptInputSubmit,
   PromptInputTextarea,
   PromptInputTextareaHandle,
@@ -36,12 +36,10 @@ import {
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
 import {
-  // GlobeIcon,
   AlertCircleIcon,
   RotateCcwIcon,
   CopyIcon,
-  EditIcon,
-  InfoIcon,
+  PencilIcon,
   CheckIcon,
   XIcon,
   Plus,
@@ -52,6 +50,19 @@ import {
   ReplyIcon,
   Volume2Icon,
   SquareIcon,
+  MicIcon,
+  MenuIcon,
+  SquarePenIcon,
+  MoreHorizontalIcon,
+  DownloadIcon,
+  TrashIcon,
+  ChevronDownIcon,
+  SparklesIcon,
+  PenLineIcon,
+  LightbulbIcon,
+  CodeIcon,
+  ListChecksIcon,
+  FileTextIcon,
 } from "lucide-react";
 import { Loader } from "@/components/ai-elements/loader";
 import { Actions, Action } from "@/components/ai-elements/actions";
@@ -72,13 +83,23 @@ import { collectConversationFileIds } from "@/lib/sandbox/runner";
 import { uploadFile, FileUploadError } from "@/lib/api/files";
 import { synthesizeMessageSpeech } from "@/lib/api/tts";
 import { FileManagerDialog } from "@/components/file-manager/FileManagerDialog";
-import { ModelOption } from "@/components/ai-elements/model-select";
+import { ModelOption, ModelSelect } from "@/components/ai-elements/model-select";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import { useSpeechDictation } from "@/hooks/useSpeechDictation";
+import { getModelTags } from "@/lib/model-tags";
+import {
+  conversationToMarkdown,
+  downloadTextFile,
+  safeFilename,
+} from "@/lib/export-conversation";
 
 // Dynamic models are now loaded from providers via useModels hook
 
@@ -106,7 +127,56 @@ interface ChatInterfaceProps {
   };
   onUpdateMessage: (messageId: string, newContent: string) => Promise<void>;
   onCancelStream: () => Promise<void>;
+  /** Mobile drawer toggle (desktop uses the sidebar rail). */
+  onToggleSidebar?: () => void;
+  onNewChat?: () => void;
+  /** Ask the parent to confirm & delete the current conversation. */
+  onRequestDeleteConversation?: (conversationId: string) => void;
+  /** Rendered under the header (e.g. error banner). */
+  banner?: ReactNode;
 }
+
+/** Imperative API used by global keyboard shortcuts. */
+export type ChatInterfaceHandle = {
+  focusComposer(): void;
+  copyLastResponse(): boolean;
+};
+
+/** Prompt starters shown on an empty chat (ChatGPT-style chips). */
+const SUGGESTIONS: { label: string; prompt: string; icon: ReactNode }[] = [
+  {
+    label: "Summarize text",
+    prompt: "Summarize the following text in a few bullet points:\n\n",
+    icon: <FileTextIcon className="size-4 text-orange-500" />,
+  },
+  {
+    label: "Help me write",
+    prompt: "Help me write ",
+    icon: <PenLineIcon className="size-4 text-violet-500" />,
+  },
+  {
+    label: "Brainstorm",
+    prompt: "Brainstorm ideas for ",
+    icon: <LightbulbIcon className="size-4 text-yellow-500" />,
+  },
+  {
+    label: "Code",
+    prompt: "Explain what this code does and suggest improvements:\n\n",
+    icon: <CodeIcon className="size-4 text-sky-500" />,
+  },
+  {
+    label: "Make a plan",
+    prompt: "Make a step-by-step plan for ",
+    icon: <ListChecksIcon className="size-4 text-emerald-500" />,
+  },
+];
+
+const formatCompact = (n: number) =>
+  n >= 1_000_000
+    ? `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`
+    : n >= 1_000
+      ? `${(n / 1_000).toFixed(1).replace(/\.0$/, "")}K`
+      : String(n);
 
 type PromptAreaHandle = {
   focus(options?: FocusOptions): void;
@@ -119,10 +189,7 @@ type PromptAreaProps = {
   placeholder: string;
   isDisabled: boolean;
   models: ModelOption[];
-  modelsLoading: boolean;
   model: string;
-  onModelChange: (model: string) => void;
-  settingsLoading: boolean;
   isModelValid: boolean;
   hasPendingMessages: boolean;
   hasRecentError: boolean;
@@ -137,10 +204,7 @@ const PromptArea = memo(
       placeholder,
       isDisabled,
       models,
-      modelsLoading,
       model,
-      onModelChange,
-      settingsLoading,
       isModelValid,
       hasPendingMessages,
       hasRecentError,
@@ -157,6 +221,13 @@ const PromptArea = memo(
     const promptInputRef = useRef<PromptInputTextareaHandle>(null);
     const imageInputRef = useRef<HTMLInputElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const dictation = useSpeechDictation((text) => {
+      const current = promptInputRef.current?.value ?? "";
+      const sep = current && !/\s$/.test(current) ? " " : "";
+      promptInputRef.current?.insertText(sep + text);
+      setIsInputEmpty(false);
+    });
 
     const handleInputChange = useCallback(
       (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -251,6 +322,7 @@ const PromptArea = memo(
                 file: fileData,
               }))
             : undefined;
+        dictation.stop();
         promptInputRef.current?.clear();
         setIsInputEmpty(true);
         setUploadedFiles([]);
@@ -259,17 +331,17 @@ const PromptArea = memo(
         onSend(message, attachments);
         promptInputRef.current?.focus({ preventScroll: true });
       },
-      [isModelValid, uploadedFiles, onSend],
+      [isModelValid, uploadedFiles, onSend, dictation],
     );
 
     return (
-      <div className="flex-shrink-0 flex justify-center !p-6 !pt-0">
+      <div className="flex-shrink-0 flex justify-center px-3 sm:px-4">
         <PromptInput
           onSubmit={handleSubmit}
           className="chat-interface w-full max-w-3xl mx-auto"
         >
           {(uploadedFiles.length > 0 || pendingFileNames.length > 0) && (
-            <div className="px-3 py-2 border-b">
+            <div className="px-3 pt-3">
               <div className="flex flex-wrap gap-2">
                 {uploadedFiles.map((file, index) => (
                   <FilePreview
@@ -281,7 +353,7 @@ const PromptArea = memo(
                 {pendingFileNames.map((name, index) => (
                   <div
                     key={`pending-${index}-${name}`}
-                    className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg border max-w-xs animate-pulse"
+                    className="flex items-center gap-2 p-2 bg-background/60 rounded-xl border max-w-xs animate-pulse"
                   >
                     <div className="flex-shrink-0 size-10 rounded border bg-background flex items-center justify-center">
                       <Loader size={16} />
@@ -295,13 +367,17 @@ const PromptArea = memo(
               </div>
             </div>
           )}
-          {uploadError && (
-            <div className="p-3 border-b">
-              <div className="flex items-center gap-2 text-destructive text-base">
+          {(uploadError || dictation.error) && (
+            <div className="px-4 pt-3">
+              <div className="flex items-center gap-2 text-destructive text-sm">
                 <AlertCircleIcon size={16} />
-                <span>{uploadError}</span>
+                <span>{uploadError || dictation.error}</span>
                 <button
-                  onClick={() => setUploadError(null)}
+                  type="button"
+                  onClick={() => {
+                    setUploadError(null);
+                    dictation.clearError();
+                  }}
                   className="ml-auto text-muted-foreground hover:text-foreground"
                 >
                   <XIcon size={14} />
@@ -338,47 +414,55 @@ const PromptArea = memo(
                   <PromptInputButton
                     variant="ghost"
                     disabled={hasPendingMessages || isDisabled}
+                    className="size-9 text-foreground/80 hover:bg-accent"
+                    aria-label="Add photos and files"
                     title={
                       !isAuthenticated
                         ? "Sign in to attach files"
-                        : "Attach files"
+                        : "Add photos and files"
                     }
                   >
-                    <Plus size={16} />
+                    <Plus className="size-5" />
                   </PromptInputButton>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="min-w-44">
+                <DropdownMenuContent align="start" side="top" className="min-w-52">
                   <DropdownMenuItem
                     onSelect={() => imageInputRef.current?.click()}
                   >
-                    <ImageIcon className="h-4 w-4" />
-                    Photos
+                    <ImageIcon />
+                    Add photos
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onSelect={() => fileInputRef.current?.click()}
                   >
-                    <FileIcon className="h-4 w-4" />
-                    Files
+                    <FileIcon />
+                    Add files
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setFileManagerOpen(true)}>
-                    <FolderOpen className="h-4 w-4" />
-                    Library
+                    <FolderOpen />
+                    Choose from library
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <PromptInputModelSelect
-                models={models}
-                value={isModelValid ? model : undefined}
-                onChange={onModelChange}
-                loading={modelsLoading}
-                disabled={settingsLoading || isDisabled}
-                helperMessage="Add AI providers in settings"
-                variant="ghost"
-                size="sm"
-                showCount={models.length > 0}
-                triggerClassName="max-sm:max-w-[200px] max-sm:flex max-sm:items-center max-sm:gap-1 font-medium max-sm:[&>span]:min-w-0 max-sm:[&>span]:flex-1 max-sm:[&>span]:truncate"
-              />
             </PromptInputTools>
+            <div className="flex items-center gap-1.5">
+              {dictation.isSupported && (
+                <PromptInputButton
+                  variant="ghost"
+                  onClick={dictation.toggle}
+                  disabled={isDisabled}
+                  aria-pressed={dictation.isListening}
+                  aria-label={dictation.isListening ? "Stop dictation" : "Dictate"}
+                  title={dictation.isListening ? "Stop dictation" : "Dictate"}
+                  className={cn(
+                    "size-9 text-foreground/80 hover:bg-accent",
+                    dictation.isListening &&
+                      "bg-red-500/15 text-red-600 hover:bg-red-500/20 dark:text-red-400",
+                  )}
+                >
+                  <MicIcon className={cn("size-[18px]", dictation.isListening && "animate-pulse")} />
+                </PromptInputButton>
+              )}
             <PromptInputSubmit
               disabled={
                 isDisabled ||
@@ -396,6 +480,7 @@ const PromptArea = memo(
               }
               onStop={onStop}
             />
+            </div>
           </PromptInputToolbar>
         </PromptInput>
         <FileManagerDialog
@@ -408,7 +493,7 @@ const PromptArea = memo(
   }),
 );
 
-export const ChatInterface = ({
+export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>(function ChatInterface({
   messages,
   webSearch,
   currentConversation,
@@ -423,7 +508,11 @@ export const ChatInterface = ({
   getBranchInfo,
   onUpdateMessage,
   onCancelStream,
-}: ChatInterfaceProps) => {
+  onToggleSidebar,
+  onNewChat,
+  onRequestDeleteConversation,
+  banner,
+}, ref) {
   const isComposerDisabled = isAuthChecking || !isAuthenticated;
   const [isDragOver, setIsDragOver] = useState(false);
   const [replySelection, setReplySelection] = useState<{
@@ -862,6 +951,25 @@ export const ChatInterface = ({
     window.getSelection()?.removeAllRanges();
   }, [replySelection]);
 
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const copiedTimerRef = useRef<number | null>(null);
+
+  const flashCopied = useCallback((id: string) => {
+    setCopiedMessageId(id);
+    if (copiedTimerRef.current) window.clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = window.setTimeout(
+      () => setCopiedMessageId(null),
+      2000,
+    );
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (copiedTimerRef.current) window.clearTimeout(copiedTimerRef.current);
+    },
+    [],
+  );
+
   const copyMessage = (messageId: string | null, fallbackContent: string) => {
     const element = messageId
       ? editableMessageRefs.current[messageId]?.getContentElement()
@@ -975,10 +1083,18 @@ export const ChatInterface = ({
     [speakingMessageId, ttsLoadingMessageId, stopReadAloud],
   );
 
-  const handleRetryMessage = async (messageId: string) => {
+  const handleRetryMessage = async (
+    messageId: string,
+    overrideModel?: string,
+  ) => {
     // Prevent retry when model is invalid
-    if (!isModelValid) {
+    const retryModel = overrideModel ?? model;
+    if (!retryModel || !models.some((m) => m.id === retryModel)) {
       return;
+    }
+    // "Retry with another model" also switches the picker, like ChatGPT.
+    if (overrideModel && overrideModel !== model) {
+      setModel(overrideModel);
     }
 
     // Match send-message behavior: keep extra bottom space and move viewport
@@ -990,7 +1106,7 @@ export const ChatInterface = ({
 
     setRetryingMessageId(messageId);
     try {
-      await onRetryMessage(messageId, model);
+      await onRetryMessage(messageId, retryModel);
     } finally {
       setRetryingMessageId(null);
     }
@@ -1047,202 +1163,293 @@ export const ChatInterface = ({
     getBranchInfo,
   ]);
 
-  const renderMessageActions = useCallback(
-    (message: FrontendMessage) => {
-      // If assistant message is pending, replace action buttons with a small spinner
-      if (message.role === "assistant" && message.status === "pending") {
-        return (
-          <div className="flex items-center py-2 text-muted-foreground">
-            <Loader size={16} />
-          </div>
-        );
-      }
-      const messageInfo = branchInfoCache.get(message.id);
-      if (!messageInfo) return null;
+  // Index of the last assistant turn — its actions stay visible (ChatGPT).
+  const lastAssistantIndex = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "assistant") return i;
+    }
+    return -1;
+  }, [messages]);
 
-      const { branchInfo, parentId } = messageInfo;
+  useImperativeHandle(
+    ref,
+    () => ({
+      focusComposer: () => promptAreaRef.current?.focus(),
+      copyLastResponse: () => {
+        const last = lastAssistantIndex >= 0 ? messages[lastAssistantIndex] : undefined;
+        if (!last || !last.content?.trim()) return false;
+        navigator.clipboard.writeText(last.content).catch(console.error);
+        flashCopied(last.id);
+        return true;
+      },
+    }),
+    [lastAssistantIndex, messages, flashCopied],
+  );
 
+  const handleExport = useCallback(() => {
+    const title = currentConversation?.title || "Chat";
+    downloadTextFile(
+      safeFilename(title),
+      conversationToMarkdown(title, messages),
+    );
+  }, [currentConversation?.title, messages]);
+
+  const renderMessageActions = (message: FrontendMessage, isLast: boolean) => {
+    // ChatGPT shows nothing while a response is streaming.
+    if (message.status === "pending") return null;
+    if (editingMessageId === message.id) return null;
+
+    const messageInfo = branchInfoCache.get(message.id);
+    if (!messageInfo) return null;
+    const { branchInfo, parentId } = messageInfo;
+    const isAssistant = message.role === "assistant";
+    const isCopied = copiedMessageId === message.id;
+
+    const copyButton = (
+      <Action
+        tooltip={isCopied ? "Copied" : message.error ? "Copy error" : "Copy"}
+        onClick={() => {
+          copyMessage(
+            message.error ? null : message.id,
+            message.error ? message.error || "Error occurred" : message.content,
+          );
+          flashCopied(message.id);
+        }}
+      >
+        {isCopied ? (
+          <CheckIcon className="size-[18px]" />
+        ) : (
+          <CopyIcon className="size-[18px]" />
+        )}
+      </Action>
+    );
+
+    if (!isAssistant) {
       return (
-        <div className="flex items-center gap-2">
-          {/* Action buttons */}
-          <Actions className="opacity-60 hover:opacity-100 transition-opacity">
-            {message.status !== "pending" &&
-              editingMessageId !== message.id && (
-                <Action
-                  tooltip="Edit message"
-                  onClick={() => setEditingMessageId(message.id)}
-                  disabled={updatingMessageId === message.id}
-                >
-                  <EditIcon className="size-4" />
-                </Action>
-              )}
+        <Actions
+          className={cn(
+            "justify-end transition-opacity",
+            "md:opacity-0 md:group-hover/turn:opacity-100 md:focus-within:opacity-100",
+          )}
+        >
+          {copyButton}
+          <Action
+            tooltip="Edit message"
+            onClick={() => setEditingMessageId(message.id)}
+            disabled={updatingMessageId === message.id}
+          >
+            <PencilIcon className="size-[18px]" />
+          </Action>
+        </Actions>
+      );
+    }
 
-            {editingMessageId === message.id && (
+    const canRetry = isModelValid && models.length > 0;
+    const isRetrying = retryingMessageId === message.id;
+    const currentModelName =
+      models.find((m) => m.id === model)?.name ?? model;
+
+    return (
+      <Actions
+        className={cn(
+          "-ml-2 transition-opacity",
+          !isLast &&
+            !message.error &&
+            "md:opacity-0 md:group-hover/turn:opacity-100 md:focus-within:opacity-100 md:has-[[data-state=open]]:opacity-100",
+        )}
+      >
+        {branchInfo.hasMultiple && (
+          <BranchNavigation
+            className="mr-1"
+            currentIndex={branchInfo.activeIndex}
+            totalCount={branchInfo.count}
+            onPrevious={() =>
+              onSwitchBranch(parentId, Math.max(0, branchInfo.activeIndex - 1))
+            }
+            onNext={() =>
+              onSwitchBranch(
+                parentId,
+                Math.min(branchInfo.count - 1, branchInfo.activeIndex + 1),
+              )
+            }
+          />
+        )}
+
+        {copyButton}
+
+        {!message.error && message.content?.trim() && (
+          <Action
+            tooltip={
+              ttsErrorMessageId === message.id
+                ? "Read aloud failed — check TTS model in Settings → Media"
+                : speakingMessageId === message.id
+                  ? "Stop reading"
+                  : ttsLoadingMessageId === message.id
+                    ? "Loading audio…"
+                    : "Read aloud"
+            }
+            onClick={() => handleReadAloud(message)}
+            disabled={
+              ttsLoadingMessageId !== null && ttsLoadingMessageId !== message.id
+            }
+            className={
+              ttsErrorMessageId === message.id
+                ? "text-destructive hover:text-destructive"
+                : speakingMessageId === message.id
+                  ? "text-foreground"
+                  : ""
+            }
+          >
+            {ttsLoadingMessageId === message.id ? (
+              <div className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            ) : speakingMessageId === message.id ? (
+              <SquareIcon className="size-4 fill-current" />
+            ) : (
+              <Volume2Icon className="size-[18px]" />
+            )}
+          </Action>
+        )}
+
+        {/* Try again / switch model (ChatGPT's regenerate menu) */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild disabled={isRetrying || !canRetry}>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Regenerate"
+              title={message.error ? "Retry" : "Try again"}
+              className={cn(
+                "h-8 gap-0.5 rounded-lg px-1.5 text-muted-foreground hover:text-foreground",
+                message.error && "text-destructive hover:text-destructive",
+              )}
+            >
+              {isRetrying ? (
+                <div className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              ) : (
+                <RotateCcwIcon className="size-[18px]" />
+              )}
+              <ChevronDownIcon className="size-3 opacity-70" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-64">
+            <DropdownMenuItem onSelect={() => handleRetryMessage(message.id)}>
+              <RotateCcwIcon />
+              <span className="flex-1">Try again</span>
+              <span className="max-w-24 truncate text-xs text-muted-foreground">
+                {currentModelName}
+              </span>
+            </DropdownMenuItem>
+            {models.length > 1 && (
               <>
-                <Action
-                  tooltip="Save changes"
-                  onClick={() =>
-                    editableMessageRefs.current[message.id]?.triggerSave()
-                  }
-                  disabled={updatingMessageId === message.id}
-                >
-                  <CheckIcon className="size-4" />
-                </Action>
-                <Action
-                  tooltip="Cancel editing"
-                  onClick={() => setEditingMessageId(null)}
-                  disabled={updatingMessageId === message.id}
-                >
-                  <XIcon className="size-4" />
-                </Action>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="px-2.5 py-1 text-xs font-medium">
+                  Retry with another model
+                </DropdownMenuLabel>
+                <div className="max-h-60 overflow-y-auto">
+                  {models
+                    .filter((m) => m.id !== model)
+                    .map((m) => (
+                      <DropdownMenuItem
+                        key={m.id}
+                        onSelect={() => handleRetryMessage(message.id, m.id)}
+                      >
+                        <SparklesIcon />
+                        <span className="min-w-0 flex-1 truncate">
+                          {m.name}
+                        </span>
+                        {getModelTags(m)
+                          .slice(0, 1)
+                          .map((tag) => (
+                            <span
+                              key={tag.label}
+                              className={`rounded-md border px-1 py-px text-[10px] ${tag.className}`}
+                            >
+                              {tag.label}
+                            </span>
+                          ))}
+                      </DropdownMenuItem>
+                    ))}
+                </div>
               </>
             )}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
-            <Action
-              tooltip={message.error ? "Copy error" : "Copy message"}
-              onClick={() =>
-                copyMessage(
-                  message.error ? null : message.id,
-                  message.error
-                    ? message.error || "Error occurred"
-                    : message.content,
-                )
-              }
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="More actions"
+              className="size-8 rounded-lg text-muted-foreground hover:text-foreground"
             >
-              <CopyIcon className="size-4" />
-            </Action>
-
-            {message.role === "assistant" &&
-              !message.error &&
-              message.content?.trim() &&
-              message.status !== "pending" && (
-                <Action
-                  tooltip={
-                    ttsErrorMessageId === message.id
-                      ? "Read aloud failed — check TTS model in Settings → Media"
-                      : speakingMessageId === message.id
-                        ? "Stop reading"
-                        : ttsLoadingMessageId === message.id
-                          ? "Loading audio…"
-                          : "Read aloud"
-                  }
-                  onClick={() => handleReadAloud(message)}
-                  disabled={
-                    ttsLoadingMessageId !== null &&
-                    ttsLoadingMessageId !== message.id
-                  }
-                  className={
-                    ttsErrorMessageId === message.id
-                      ? "text-destructive hover:text-destructive-foreground hover:bg-destructive"
-                      : speakingMessageId === message.id
-                        ? "text-primary"
-                        : ""
-                  }
-                >
-                  {ttsLoadingMessageId === message.id ? (
-                    <div className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  ) : speakingMessageId === message.id ? (
-                    <SquareIcon className="size-4" />
-                  ) : (
-                    <Volume2Icon className="size-4" />
-                  )}
-                </Action>
-              )}
-
-            {message.role === "assistant" && message.status !== "pending" && (
-              <Action
-                tooltip={
-                  message.error
-                    ? "Retry getting response"
-                    : "Regenerate response"
-                }
-                onClick={() => handleRetryMessage(message.id)}
-                disabled={
-                  retryingMessageId === message.id ||
-                  !isModelValid ||
-                  models.length === 0
-                }
-                className={
-                  message.error
-                    ? "text-destructive hover:text-destructive-foreground hover:bg-destructive"
-                    : ""
-                }
+              <MoreHorizontalIcon className="size-[18px]" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-56">
+            {!message.error && (
+              <DropdownMenuItem
+                onSelect={() => setEditingMessageId(message.id)}
+                disabled={updatingMessageId === message.id}
               >
-                {retryingMessageId === message.id ? (
-                  <div className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                ) : (
-                  <RotateCcwIcon className="size-4" />
-                )}
-              </Action>
+                <PencilIcon />
+                Edit response
+              </DropdownMenuItem>
             )}
-
-            {/* Info button showing model / tokens / context / speed (assistant only) */}
-            {message.role === "assistant" && (
-              <Action
-                tooltip={`${message.model || "model unknown"}
-								Tokens: ${message.tokenCount ? `${Math.round(message.tokenCount * 0.001 * 10) / 10}` : "0"}k
-								Context: ${message.contextSize ? `${Math.round(message.contextSize * 0.001 * 10) / 10}` : "0"}k
-								Speed: ${message.speed !== undefined ? `${message.speed}` : "0"} t/s`}
-                aria-label="Message metadata"
-              >
-                <InfoIcon className="size-4" />
-              </Action>
-            )}
-          </Actions>
-
-          {/* Branch navigation for assistant messages with multiple branches */}
-          {message.role === "assistant" && branchInfo.hasMultiple && (
-            <BranchNavigation
-              currentIndex={branchInfo.activeIndex}
-              totalCount={branchInfo.count}
-              onPrevious={() => {
-                const newIndex = Math.max(0, branchInfo.activeIndex - 1);
-                onSwitchBranch(parentId, newIndex);
-              }}
-              onNext={() => {
-                const newIndex = Math.min(
-                  branchInfo.count - 1,
-                  branchInfo.activeIndex + 1,
-                );
-                onSwitchBranch(parentId, newIndex);
-              }}
-            />
-          )}
-        </div>
-      );
-    },
-    [
-      branchInfoCache,
-      editingMessageId,
-      updatingMessageId,
-      retryingMessageId,
-      speakingMessageId,
-      ttsLoadingMessageId,
-      ttsErrorMessageId,
-      onSwitchBranch,
-      handleRetryMessage,
-      handleReadAloud,
-      copyMessage,
-      setEditingMessageId,
-      editableMessageRefs,
-    ],
-  );
+            <DropdownMenuSeparator />
+            <div className="space-y-1 px-2.5 py-1.5 text-xs text-muted-foreground">
+              <div className="truncate font-medium text-foreground/80">
+                {message.model || "Model unknown"}
+              </div>
+              <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 tabular-nums">
+                <span>Tokens</span>
+                <span className="text-right">
+                  {message.tokenCount ? formatCompact(message.tokenCount) : "—"}
+                </span>
+                <span>Context</span>
+                <span className="text-right">
+                  {message.contextSize ? formatCompact(message.contextSize) : "—"}
+                </span>
+                <span>Speed</span>
+                <span className="text-right">
+                  {message.speed !== undefined ? `${message.speed} t/s` : "—"}
+                </span>
+              </div>
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </Actions>
+    );
+  };
 
   const renderMessageContent = (message: FrontendMessage) => {
     if (message.error) {
       return (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-destructive">
+        <div className="space-y-1.5 rounded-2xl border border-destructive/25 bg-destructive/5 px-4 py-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-destructive">
             <AlertCircleIcon className="size-4 flex-shrink-0" />
-            <span className="font-medium">
-              {message.role === "assistant"
-                ? "Failed to get response"
-                : "Failed to send message"}
-            </span>
+            {message.role === "assistant"
+              ? "Something went wrong"
+              : "Failed to send message"}
           </div>
-          <div className="text-base text-destructive/80">
+          <div className="text-sm text-destructive/80 break-words">
             {message.error || "An unknown error occurred"}
           </div>
+        </div>
+      );
+    }
+
+    // Waiting for the first token: ChatGPT's pulsing dot.
+    if (
+      message.role === "assistant" &&
+      message.status === "pending" &&
+      !message.content &&
+      !message.reasoning &&
+      !(message.toolCalls && message.toolCalls.length > 0)
+    ) {
+      return (
+        <div className="flex h-7 items-center" aria-label="Thinking">
+          <span className="size-3.5 rounded-full bg-foreground animate-thinking" />
         </div>
       );
     }
@@ -1264,6 +1471,32 @@ export const ChatInterface = ({
     );
   };
 
+  /** Inline editor card with Cancel / Save (ChatGPT edit-message UI). */
+  const renderEditor = (message: FrontendMessage) => (
+    <div className="w-full rounded-3xl bg-bubble px-5 py-3">
+      {renderMessageContent(message)}
+      <div className="mt-2 flex justify-end gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 rounded-full bg-background px-4 dark:bg-background"
+          onClick={() => setEditingMessageId(null)}
+          disabled={updatingMessageId === message.id}
+        >
+          Cancel
+        </Button>
+        <Button
+          size="sm"
+          className="h-9 rounded-full px-4"
+          onClick={() => editableMessageRefs.current[message.id]?.triggerSave()}
+          disabled={updatingMessageId === message.id}
+        >
+          {updatingMessageId === message.id ? "Saving…" : "Save"}
+        </Button>
+      </div>
+    </div>
+  );
+
   const getMessageKey = (message: FrontendMessage) => {
     let messageKey = messageRenderKeysRef.current.get(message);
     if (!messageKey) {
@@ -1277,26 +1510,41 @@ export const ChatInterface = ({
     return messageKey;
   };
 
-  const renderMessage = (message: FrontendMessage) => {
+  const renderMessage = (message: FrontendMessage, index: number) => {
     const hasAttachments =
       message.attachments && message.attachments.length > 0;
+    const isEditing = editingMessageId === message.id;
+    const isLast = index === lastAssistantIndex;
+
+    if (isEditing) {
+      return (
+        <div className="chat-message-container group/turn space-y-2 py-2">
+          {hasAttachments && message.role === "user" && (
+            <div className="flex justify-end">
+              <AttachmentMessage
+                attachments={message.attachments}
+                role={message.role}
+              />
+            </div>
+          )}
+          {renderEditor(message)}
+        </div>
+      );
+    }
 
     return (
-      <div className="chat-message-container">
-        {/* Render message with optional attachments in a single component to manage margins better */}
+      <div className="chat-message-container group/turn">
         <MessageComponent
           from={message.role}
           status={message.status}
           error={message.error}
-          className={message.role === "user" ? "pb-1" : ""}
         >
           <div
             className={cn(
-              "flex flex-col gap-3 w-full",
+              "flex flex-col gap-2 w-full",
               message.role === "user" ? "items-end" : "items-start",
             )}
           >
-            {/* Render attachments first if they exists */}
             {hasAttachments && (
               <AttachmentMessage
                 attachments={message.attachments}
@@ -1304,11 +1552,14 @@ export const ChatInterface = ({
               />
             )}
 
-            {/* Render main message content */}
-            <MessageContent content={message.content}>
-              {message.role === "user" ? (
-                renderMessageContent(message)
-              ) : (
+            {message.role === "user" ? (
+              (message.content || message.error) && (
+                <MessageContent content={message.content}>
+                  {renderMessageContent(message)}
+                </MessageContent>
+              )
+            ) : (
+              <MessageContent content={message.content}>
                 <div className="space-y-4">
                   {(message.reasoning ||
                     (message.toolCalls && message.toolCalls.length > 0)) && (
@@ -1319,21 +1570,20 @@ export const ChatInterface = ({
                     />
                   )}
                   {renderMessageContent(message)}
-                  {renderMessageActions(message)}
                 </div>
-              )}
-            </MessageContent>
+                {renderMessageActions(message, isLast)}
+              </MessageContent>
+            )}
           </div>
         </MessageComponent>
 
-        {message.role === "user" && message.status !== "pending" && (
-          <div className="flex justify-end">
-            {renderMessageActions(message)}
-          </div>
-        )}
+        {message.role === "user" && renderMessageActions(message, false)}
       </div>
     );
   };
+
+  const isEmpty = messages.length === 0 && !isConversationLoading;
+  const selectedModel = models.find((m) => m.id === model);
 
   return (
     <div
@@ -1362,33 +1612,130 @@ export const ChatInterface = ({
           <span className="text-sm font-medium">Drop files to attach</span>
         </div>
       </div>
-      <Conversation ref={conversationRef} className="flex-1 relative">
-        {messages.length === 0 && !isConversationLoading ? (
-          <div className="h-full flex items-center justify-center">
+
+      {/* Header: model picker on the left (ChatGPT-style) */}
+      <header className="relative z-10 flex h-[52px] shrink-0 items-center justify-between gap-2 bg-background px-2 md:px-3">
+        <div className="flex min-w-0 items-center gap-1">
+          {onToggleSidebar && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onToggleSidebar}
+              className="size-9 rounded-lg md:hidden"
+              aria-label="Open sidebar"
+            >
+              <MenuIcon className="size-5" />
+            </Button>
+          )}
+          <ModelSelect
+            models={models}
+            value={isModelValid ? model : undefined}
+            onChange={handleModelChange}
+            loading={modelsLoading}
+            disabled={settingsLoading || isComposerDisabled}
+            helperMessage="Add AI providers in settings"
+            variant="ghost"
+            showCount={models.length > 0}
+            align="start"
+            placeholder={
+              modelsLoading
+                ? "Loading models..."
+                : models.length === 0
+                  ? "No models"
+                  : "Select a model"
+            }
+            renderValue={(m) => (
+              <span className="truncate text-lg font-medium">{m.name}</span>
+            )}
+            triggerAriaLabel="Model selector"
+            triggerClassName={cn(
+              "h-10 max-w-[60vw] gap-1 rounded-xl !px-3 text-lg font-medium text-foreground/90 hover:!bg-accent data-[state=open]:!bg-accent",
+              "[&>svg]:size-4 [&>svg]:opacity-60",
+            )}
+          />
+          {selectedModel &&
+            getModelTags(selectedModel)
+              .slice(0, 1)
+              .map((tag) => (
+                <span
+                  key={tag.label}
+                  className={`hidden rounded-md border px-1.5 py-0.5 text-[10px] font-medium sm:inline-flex ${tag.className}`}
+                >
+                  {tag.label}
+                </span>
+              ))}
+        </div>
+        <div className="flex items-center gap-1">
+          {currentConversation && messages.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-9 rounded-lg"
+                  aria-label="Conversation options"
+                >
+                  <MoreHorizontalIcon className="size-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-52">
+                <DropdownMenuItem onSelect={handleExport}>
+                  <DownloadIcon />
+                  Export as Markdown
+                </DropdownMenuItem>
+                {onRequestDeleteConversation && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onSelect={() =>
+                        onRequestDeleteConversation(currentConversation.id)
+                      }
+                      className="text-destructive focus:text-destructive [&_svg]:!text-destructive"
+                    >
+                      <TrashIcon />
+                      Delete
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          {onNewChat && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onNewChat}
+              disabled={isComposerDisabled}
+              className="size-9 rounded-lg md:hidden"
+              aria-label="New chat"
+            >
+              <SquarePenIcon className="size-5" />
+            </Button>
+          )}
+        </div>
+      </header>
+
+      {banner}
+
+      <Conversation
+        ref={conversationRef}
+        className={cn("relative", isEmpty ? "flex-1 md:flex-[1.15]" : "flex-1")}
+      >
+        {isEmpty ? (
+          <div className="flex h-full flex-col items-center justify-center px-4 pb-6 md:justify-end md:pb-8">
             <Welcome
-              stats={stats}
               isLoading={isAuthChecking}
-              message={
-                isAuthChecking
-                  ? undefined
-                  : isAuthenticated
-                    ? "Here is a glimpse of your previous interactions"
-                    : "Sign in from the sidebar to load your conversations and start chatting"
-              }
+              isAuthenticated={isAuthenticated}
             />
           </div>
         ) : (
-          <ConversationContent className="chat-interface w-full max-w-3xl mx-auto !px-5 lg:!px-3 lg:!pt-14">
+          <ConversationContent className="chat-interface w-full max-w-3xl mx-auto !px-4 sm:!px-6 !pt-4">
             {/* eslint-disable-next-line react-hooks/refs */}
             {messages.map((message, index) => {
               const stableKey = getMessageKey(message);
               return (
-                <div
-                  key={stableKey}
-                  data-index={index}
-                  style={{ paddingBottom: "16px" }}
-                >
-                  {renderMessage(message)}
+                <div key={stableKey} data-index={index} className="pb-4">
+                  {renderMessage(message, index)}
                 </div>
               );
             })}
@@ -1405,19 +1752,21 @@ export const ChatInterface = ({
               e.preventDefault();
               handleReply();
             }}
-            className="absolute z-50 flex items-center gap-1.5 rounded-md border bg-input/60 px-2.5 py-1.5 text-sm font-medium shadow-xs hover:bg-accent hover:text-accent-foreground dark:border-input hover:bg-input backdrop-blur-sm animate-fade-in transition-colors !duration-100"
+            className="absolute z-50 flex items-center gap-1.5 rounded-full border bg-popover px-3 py-1.5 text-sm font-medium shadow-lg hover:bg-accent animate-fade-in transition-colors !duration-100"
             style={{
               left: `${replySelection.x}px`,
-              top: replySelection.placement === "above"
-                ? `${replySelection.y - 8}px`
-                : `${replySelection.y + 8}px`,
-              transform: replySelection.placement === "above"
-                ? "translate(-50%, -100%)"
-                : "translate(-50%, 0)",
+              top:
+                replySelection.placement === "above"
+                  ? `${replySelection.y - 8}px`
+                  : `${replySelection.y + 8}px`,
+              transform:
+                replySelection.placement === "above"
+                  ? "translate(-50%, -100%)"
+                  : "translate(-50%, 0)",
             }}
           >
             <ReplyIcon className="size-3.5" />
-            Reply
+            Ask about this
           </button>
         )}
         <ConversationScrollButton />
@@ -1426,19 +1775,52 @@ export const ChatInterface = ({
       <PromptArea
         ref={promptAreaRef}
         onSend={handleSend}
-        placeholder={"Ask anything here ..."}
+        placeholder={isAuthenticated ? "Ask anything" : "Sign in to start chatting"}
         isDisabled={isComposerDisabled}
         models={models}
-        modelsLoading={modelsLoading}
         model={model}
-        onModelChange={handleModelChange}
-        settingsLoading={settingsLoading}
         isModelValid={isModelValid}
         hasPendingMessages={hasPendingMessages}
         hasRecentError={hasRecentError}
         onStop={onCancelStream}
         isAuthenticated={isAuthenticated}
       />
+
+      {isEmpty ? (
+        <div className="flex flex-col items-center px-4 pt-4 pb-4 md:flex-1">
+          {isAuthenticated && (
+            <div className="flex max-w-3xl flex-wrap justify-center gap-2 max-md:hidden">
+              {SUGGESTIONS.map((sgt) => (
+                <button
+                  key={sgt.label}
+                  type="button"
+                  onClick={() => {
+                    promptAreaRef.current?.insertText(sgt.prompt);
+                    promptAreaRef.current?.focus();
+                  }}
+                  className="flex h-10 items-center gap-2 rounded-full border border-border px-4 text-sm text-foreground/80 hover:bg-accent animate-slide-up"
+                >
+                  {sgt.icon}
+                  {sgt.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {isAuthenticated && stats && stats.totalConversations > 0 && (
+            <p className="mt-6 text-xs tabular-nums text-muted-foreground/80 max-md:hidden">
+              {formatCompact(stats.totalTokens + stats.totalInputTokens)} tokens
+              {" · "}
+              {formatCompact(stats.totalConversations)} chats
+              {" · "}
+              {formatCompact(stats.totalMessages)} replies
+            </p>
+          )}
+        </div>
+      ) : (
+        <p className="px-4 py-2 text-center text-xs text-muted-foreground">
+          AI can make mistakes. Check important info.
+        </p>
+      )}
     </div>
   );
-};
+});

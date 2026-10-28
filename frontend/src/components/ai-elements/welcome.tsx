@@ -1,158 +1,55 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { ComponentProps, useEffect, useRef, useState } from "react";
-import { WelcomeStats } from "@/lib/api/types";
-
-// Cubic ease-in-out — derivative is 0 at both ends so it genuinely crawls
-// in/out, and the curve never plateaus early like a sigmoid does.
-function cubicEaseInOut(t: number): number {
-  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-}
-
-function useCountUp(target: number, duration = 3000): number {
-  const [value, setValue] = useState(0);
-  const rafRef = useRef<number | null>(null);
-  const startRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (target === 0) {
-      setValue(0);
-      return;
-    }
-    setValue(0);
-    startRef.current = null;
-
-    const timeout = setTimeout(() => {
-      const step = (ts: number) => {
-        if (startRef.current === null) startRef.current = ts;
-        const progress = Math.min((ts - startRef.current) / duration, 1);
-        setValue(Math.round(cubicEaseInOut(progress) * target));
-        if (progress < 1) rafRef.current = requestAnimationFrame(step);
-      };
-      rafRef.current = requestAnimationFrame(step);
-    }, 0);
-
-    return () => {
-      clearTimeout(timeout);
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-    };
-  }, [target, duration]);
-
-  return value;
-}
-
-function formatStatNumber(n: number): string {
-  if (n >= 1_000_000)
-    return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
-  return n.toString();
-}
-
-const STAT_DEFS: { key: keyof WelcomeStats; label: string }[] = [
-  { key: "totalTokens", label: "Tokens Out" },
-  { key: "totalInputTokens", label: "Tokens In" },
-  { key: "totalConversations", label: "Conversations" },
-  { key: "totalMessages", label: "Messages" },
-];
-
-function StatCell({
-  value,
-  label,
-  index,
-}: {
-  value: number;
-  label: string;
-  index: number;
-}) {
-  const animated = useCountUp(value, 3000);
-  // On small screens (2-col grid): border only on right column (items 1, 3)
-  // On sm+ (4-col single row): border on every item except the first (items 1, 2, 3)
-  const borderClass =
-    index === 0
-      ? ""
-      : index % 2 !== 0
-        ? "border-l border-border/40" // items 1 & 3: always
-        : "sm:border-l sm:border-border/40"; // item 2: sm+ only
-  return (
-    <div
-      className={cn("flex flex-col items-center gap-2 py-5 px-4", borderClass)}
-    >
-      <span className="text-3xl sm:text-4xl font-thin tabular-nums tracking-tight text-foreground leading-none whitespace-nowrap">
-        {formatStatNumber(animated)}
-      </span>
-      <span className="text-[9px] font-normal tracking-[0.16em] uppercase text-muted-foreground text-center whitespace-nowrap">
-        {label}
-      </span>
-    </div>
-  );
-}
+import { ComponentProps, useMemo } from "react";
 
 export interface WelcomeProps extends ComponentProps<"div"> {
-  stats?: WelcomeStats;
   isLoading?: boolean;
-  message?: string;
+  isAuthenticated?: boolean;
 }
 
+const GREETINGS = [
+  "What can I help with?",
+  "What's on your mind today?",
+  "Where should we begin?",
+  "What are you working on?",
+  "Ready when you are.",
+];
+
+/** Empty-chat greeting shown above the centered composer (ChatGPT-style). */
 export const Welcome = ({
   className,
-  stats,
   isLoading = false,
-  message,
+  isAuthenticated = true,
   ...props
 }: WelcomeProps) => {
-  const displayStats: WelcomeStats = isLoading
-    ? {
-        totalTokens: 0,
-        totalInputTokens: 0,
-        totalConversations: 0,
-        totalMessages: 0,
-      }
-    : (stats ?? {
-        totalTokens: 0,
-        totalInputTokens: 0,
-        totalConversations: 0,
-        totalMessages: 0,
-      });
+  // Pick once per mount so the heading doesn't flicker on re-render.
+  const greeting = useMemo(
+    () => GREETINGS[Math.floor(Math.random() * GREETINGS.length)],
+    [],
+  );
 
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-center w-full px-4 select-none animate-fade-in",
+        "flex w-full flex-col items-center justify-center select-none",
         className,
       )}
       {...props}
     >
-      <h1 className="text-3xl sm:text-4xl font-semibold text-foreground tracking-tight mb-8 text-center">
-        How can I help you?
-      </h1>
-
-      <p
+      <h1
         className={cn(
-          "mb-6 max-w-md text-center text-sm text-muted-foreground",
-          !message && "invisible",
+          "text-center text-[28px] font-normal tracking-tight text-foreground sm:text-[32px] animate-slide-up",
+          isLoading && "invisible",
         )}
       >
-        {message ?? "\u00A0"}
-      </p>
-
-      <div className="w-full max-w-lg">
-        <div className="border-t border-border/40" />
-
-        {/* 2×2 on mobile, 4-col row on sm+ */}
-        <div className="grid grid-cols-2 sm:grid-cols-4">
-          {STAT_DEFS.map(({ key, label }, i) => (
-            <StatCell
-              key={key}
-              value={displayStats[key] ?? 0}
-              label={label}
-              index={i}
-            />
-          ))}
-        </div>
-
-        <div className="border-t border-border/40" />
-      </div>
+        {isAuthenticated ? greeting : "Welcome to SSD AI"}
+      </h1>
+      {!isLoading && !isAuthenticated && (
+        <p className="mt-3 max-w-md text-center text-sm text-muted-foreground animate-slide-up">
+          Log in to load your conversations and start chatting.
+        </p>
+      )}
     </div>
   );
 };

@@ -6,109 +6,127 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import {
-  PlusIcon,
-  ChevronLeftIcon,
-  MoreHorizontalIcon,
-  PencilIcon,
-  TrashIcon,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Kbd } from "@/components/ui/kbd";
+import {
+  ActivityIcon,
+  ChevronsUpDownIcon,
+  KeyboardIcon,
   LogInIcon,
   LogOutIcon,
-  SidebarIcon,
+  MoreHorizontalIcon,
+  PanelLeftCloseIcon,
+  PanelLeftOpenIcon,
+  PencilIcon,
+  PinIcon,
+  PinOffIcon,
   SearchIcon,
-  Loader2Icon,
+  SettingsIcon,
+  SquarePenIcon,
+  SunMoonIcon,
+  TrashIcon,
+  UserIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   ComponentProps,
-  useDeferredValue,
+  ReactNode,
   useEffect,
   useLayoutEffect,
-  useState,
   useMemo,
   useRef,
+  useState,
 } from "react";
 import { ClientConversation } from "@/lib/clientConversationManager";
 import { useAuth } from "@/hooks/useAuth";
+import { usePinnedConversations } from "@/hooks/usePinnedConversations";
 import { LoginDialog } from "@/components/auth/LoginDialog";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { conversationsAPI } from "@/lib/api/conversations";
-import type { ConversationSearchHit } from "@/lib/api/types";
+import { groupConversations } from "@/lib/conversation-groups";
+import { modKeyLabel, shiftKeyLabel } from "@/lib/platform";
+import { useTheme, type Theme } from "@/components/theme-provider";
 
 export interface ConversationSidebarProps extends ComponentProps<"div"> {
   conversations?: ClientConversation[];
   activeConversationId?: string | null;
   onConversationSelect?: (conversationId: string) => void;
   onNewChat?: () => void;
+  /** Called when the user asks to delete; the parent shows the confirmation. */
   onDeleteConversation?: (conversationId: string) => void;
   onRenameConversation?: (conversationId: string, newTitle: string) => void;
+  onOpenSearch?: () => void;
+  onOpenSettings?: () => void;
+  onOpenShortcuts?: () => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
-  maxWidth?: string;
   isLoading?: boolean;
 }
 
-type ListConversation = ClientConversation & {
-  /** Present when this row matched via message FTS */
-  searchSnippet?: string;
-};
-
 type FlatItem =
   | { type: "header"; id: string; label: string }
-  | { type: "item"; id: string; data: ListConversation };
+  | { type: "item"; id: string; data: ClientConversation; pinned: boolean };
 
-const getConversationGroup = (conversation: ClientConversation): string => {
-  const dateStr =
-    conversation.backendConversation?.updatedAt ||
-    conversation.backendConversation?.createdAt;
-  if (!dateStr) return "Today";
+/** One icon button in the collapsed rail, with a tooltip to its right. */
+const RailButton = ({
+  label,
+  children,
+  ...props
+}: ComponentProps<typeof Button> & { label: ReactNode }) => (
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="size-9 rounded-lg text-foreground/80 hover:bg-sidebar-accent dark:hover:bg-sidebar-accent"
+        {...props}
+      >
+        {children}
+      </Button>
+    </TooltipTrigger>
+    <TooltipContent side="right">{label}</TooltipContent>
+  </Tooltip>
+);
 
-  const date = new Date(dateStr);
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const last7Days = new Date(today);
-  last7Days.setDate(last7Days.getDate() - 7);
-
-  if (date >= today) return "Today";
-  if (date >= yesterday) return "Yesterday";
-  if (date >= last7Days) return "Last 7 Days";
-  return "Older";
-};
-
-const updatedAtMs = (c: ClientConversation): number => {
-  const raw =
-    c.backendConversation?.updatedAt || c.backendConversation?.createdAt;
-  if (!raw) return 0;
-  const t = Date.parse(raw);
-  return Number.isFinite(t) ? t : 0;
-};
-
-const sortByUpdatedDesc = (a: ClientConversation, b: ClientConversation) =>
-  updatedAtMs(b) - updatedAtMs(a);
-
-/** Render FTS snippet with [matched] markers from the backend. */
-const SearchSnippet = ({ snippet }: { snippet: string }) => {
-  const parts = snippet.split(/(\[[^\]]*\])/g);
-  return (
-    <span className="block text-xs text-muted-foreground/80 truncate leading-snug">
-      {parts.map((part, i) => {
-        if (part.startsWith("[") && part.endsWith("]") && part.length > 2) {
-          return (
-            <span key={i} className="text-foreground/70 font-medium">
-              {part.slice(1, -1)}
-            </span>
-          );
-        }
-        return <span key={i}>{part}</span>;
-      })}
+/** Full-width nav row ("New chat", "Search chats"). */
+const NavRow = ({
+  icon,
+  label,
+  shortcut,
+  ...props
+}: ComponentProps<"button"> & {
+  icon: ReactNode;
+  label: string;
+  shortcut?: string[];
+}) => (
+  <button
+    type="button"
+    className="group/nav flex h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-sm text-foreground hover:bg-sidebar-accent disabled:pointer-events-none disabled:opacity-50"
+    {...props}
+  >
+    <span className="flex size-5 items-center justify-center text-foreground/80 [&_svg]:size-[18px]">
+      {icon}
     </span>
-  );
-};
+    <span className="flex-1 truncate text-left">{label}</span>
+    {shortcut && (
+      <Kbd
+        keys={shortcut}
+        className="opacity-0 transition-opacity group-hover/nav:opacity-100 max-md:hidden"
+      />
+    )}
+  </button>
+);
 
 export const ConversationSidebar = ({
   conversations = [],
@@ -117,6 +135,9 @@ export const ConversationSidebar = ({
   onNewChat,
   onDeleteConversation,
   onRenameConversation,
+  onOpenSearch,
+  onOpenSettings,
+  onOpenShortcuts,
   isCollapsed = false,
   onToggleCollapse,
   isLoading = false,
@@ -124,176 +145,43 @@ export const ConversationSidebar = ({
   ...props
 }: ConversationSidebarProps) => {
   const { isAuthenticated, isCheckingAuth } = useAuth();
-  const width = 272; // Fixed width in pixels
+  const { pinned, togglePin } = usePinnedConversations();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState<string>("");
-  // Input value updates immediately; list filtering is deferred so typing stays responsive.
-  const [searchTerm, setSearchTerm] = useState<string>("");
-  const deferredSearch = useDeferredValue(searchTerm);
-  const [ftsHits, setFtsHits] = useState<ConversationSearchHit[]>([]);
-  const [ftsLoading, setFtsLoading] = useState(false);
-
-  const trimmedSearch = deferredSearch.trim();
-  const isSearching = trimmedSearch.length > 0;
-  const isSearchPending = searchTerm.trim() !== trimmedSearch;
-
-  // Title filter uses deferred query so the input never waits on list work.
-  const titleMatches = useMemo(() => {
-    if (!isSearching) return conversations;
-    const q = trimmedSearch.toLowerCase();
-    return conversations.filter((c) => c.title.toLowerCase().includes(q));
-  }, [conversations, isSearching, trimmedSearch]);
-
-  // Debounced FTS over message bodies. Loading flag only flips when fetch starts
-  // (not on every keystroke) to avoid extra re-renders while typing.
-  useEffect(() => {
-    if (!isSearching || !isAuthenticated) {
-      setFtsHits((prev) => (prev.length === 0 ? prev : []));
-      setFtsLoading(false);
-      return;
-    }
-
-    const controller = new AbortController();
-    const query = trimmedSearch;
-
-    const timer = window.setTimeout(async () => {
-      setFtsLoading(true);
-      try {
-        const hits = await conversationsAPI.searchConversations(
-          query,
-          controller.signal,
-        );
-        if (!controller.signal.aborted) {
-          setFtsHits(hits);
-        }
-      } catch (err) {
-        if (controller.signal.aborted) return;
-        if (err instanceof DOMException && err.name === "AbortError") return;
-        if (err instanceof Error && err.name === "AbortError") return;
-        console.error("Conversation search failed:", err);
-        setFtsHits([]);
-      } finally {
-        if (!controller.signal.aborted) {
-          setFtsLoading(false);
-        }
-      }
-    }, 220);
-
-    return () => {
-      window.clearTimeout(timer);
-      controller.abort();
-    };
-  }, [trimmedSearch, isSearching, isAuthenticated]);
-
-  // Merge title matches + FTS hits into a single list for display.
-  const filteredConversations = useMemo((): ListConversation[] => {
-    // Manager already keeps sidebar order — avoid copy+sort on every idle render.
-    if (!isSearching) {
-      return conversations as ListConversation[];
-    }
-
-    const byId = new Map(conversations.map((c) => [c.id, c]));
-    const snippetByConv = new Map(
-      ftsHits.map((h) => [h.conversationId, h.snippet]),
-    );
-    const result = new Map<string, ListConversation>();
-
-    for (const c of titleMatches) {
-      const snippet = snippetByConv.get(c.id);
-      // Shallow wrapper only when a snippet is needed (keeps list work cheap).
-      result.set(c.id, snippet ? { ...c, searchSnippet: snippet } : c);
-    }
-
-    for (const hit of ftsHits) {
-      if (result.has(hit.conversationId)) {
-        const existing = result.get(hit.conversationId)!;
-        if (!existing.searchSnippet && hit.snippet) {
-          result.set(hit.conversationId, {
-            ...existing,
-            searchSnippet: hit.snippet,
-          });
-        }
-        continue;
-      }
-      const known = byId.get(hit.conversationId);
-      if (known) {
-        result.set(hit.conversationId, {
-          ...known,
-          searchSnippet: hit.snippet,
-        });
-      } else {
-        result.set(hit.conversationId, {
-          id: hit.conversationId,
-          title: hit.title || "New Chat",
-          messages: [],
-          pendingMessageIds: new Set(),
-          activeBranches: new Map(),
-          searchSnippet: hit.snippet,
-          backendConversation: {
-            id: hit.conversationId,
-            userId: "",
-            title: hit.title,
-            createdAt: hit.updatedAt,
-            updatedAt: hit.updatedAt,
-            messages: {},
-          },
-        });
-      }
-    }
-
-    return Array.from(result.values()).sort(sortByUpdatedDesc);
-  }, [conversations, isSearching, titleMatches, ftsHits]);
-
-  // Group conversations (skip date groups while searching — flat results feel faster)
-  const groupedConversations = useMemo(() => {
-    if (isSearching) {
-      return { Results: filteredConversations } as Record<
-        string,
-        ListConversation[]
-      >;
-    }
-
-    const groups: Record<string, ListConversation[]> = {
-      Today: [],
-      Yesterday: [],
-      "Last 7 Days": [],
-      Older: [],
-    };
-
-    filteredConversations.forEach((conversation) => {
-      const group = getConversationGroup(conversation);
-      if (group in groups) {
-        groups[group].push(conversation);
-      } else {
-        groups["Older"].push(conversation);
-      }
-    });
-
-    return groups;
-  }, [filteredConversations, isSearching]);
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const canChat = isAuthenticated && !isCheckingAuth;
 
   const flatItems = useMemo(() => {
     const items: FlatItem[] = [];
-    const groupOrder = isSearching
-      ? ["Results"]
-      : ["Today", "Yesterday", "Last 7 Days", "Older"];
+    const pinnedSet = new Set(pinned);
+    const byId = new Map(conversations.map((c) => [c.id, c]));
 
-    groupOrder.forEach((group) => {
-      const groupItems = groupedConversations[group];
-      if (!groupItems || groupItems.length === 0) return;
-      if (!isSearching) {
-        items.push({ type: "header", id: `header-${group}`, label: group });
+    const pinnedConvs = pinned
+      .map((id) => byId.get(id))
+      .filter((c): c is ClientConversation => !!c);
+    if (pinnedConvs.length > 0) {
+      items.push({ type: "header", id: "header-pinned", label: "Pinned" });
+      for (const c of pinnedConvs) {
+        items.push({ type: "item", id: c.id, data: c, pinned: true });
       }
-      groupItems.forEach((conversation) => {
-        items.push({ type: "item", id: conversation.id, data: conversation });
+    }
+
+    // Manager already keeps sidebar order (newest first).
+    const rest = conversations.filter((c) => !pinnedSet.has(c.id));
+    for (const group of groupConversations(rest)) {
+      items.push({
+        type: "header",
+        id: `header-${group.label}`,
+        label: group.label,
       });
-    });
+      for (const c of group.items) {
+        items.push({ type: "item", id: c.id, data: c, pinned: false });
+      }
+    }
     return items;
-  }, [groupedConversations, isSearching]);
+  }, [conversations, pinned]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  // Stable estimate lookup without closing over a new flatItems array identity
-  // in a way that forces virtualizer thrash every keystroke.
   const flatItemsRef = useRef(flatItems);
   flatItemsRef.current = flatItems;
 
@@ -302,17 +190,13 @@ export const ConversationSidebar = ({
     // display:none (caused mid-list start + jumpy upward scroll on reopen).
     count: isCollapsed ? 0 : flatItems.length,
     getScrollElement: () => (isCollapsed ? null : scrollRef.current),
-    estimateSize: (index) => {
-      const item = flatItemsRef.current[index];
-      if (!item || item.type === "header") return 40;
-      return item.data.searchSnippet ? 56 : 40;
-    },
-    // Skip expensive DOM remeasure on every filter tick; estimates are close enough.
-    // measureElement still corrects when rows mount.
-    overscan: 8,
+    estimateSize: (index) =>
+      flatItemsRef.current[index]?.type === "header" ? 36 : 36,
+    overscan: 10,
+    getItemKey: (index) => flatItemsRef.current[index]?.id ?? index,
   });
 
-  // Pin to top only on collapse→open so Today is visible (stale scroll survives collapse).
+  // Pin to top only on collapse→open so the newest chats are visible.
   const wasCollapsedRef = useRef(isCollapsed);
   useLayoutEffect(() => {
     const justOpened = wasCollapsedRef.current && !isCollapsed;
@@ -323,11 +207,6 @@ export const ConversationSidebar = ({
     if (el) el.scrollTop = 0;
     rowVirtualizer.scrollToOffset(0, { align: "start" });
   }, [isCollapsed, rowVirtualizer]);
-
-  const handleRename = (conversationId: string, currentTitle: string) => {
-    setEditingId(conversationId);
-    setEditingTitle(currentTitle);
-  };
 
   const handleSaveRename = (conversationId: string) => {
     if (editingTitle.trim() && onRenameConversation) {
@@ -342,295 +221,309 @@ export const ConversationSidebar = ({
     setEditingTitle("");
   };
 
-  const handleDelete = (conversationId: string) => {
-    if (onDeleteConversation) {
-      onDeleteConversation(conversationId);
-    }
-  };
-
-  const showEmptySearch =
-    isSearching &&
-    filteredConversations.length === 0 &&
-    !ftsLoading;
-
   return (
-    <div
-      className={cn(
-        "sidebar flex h-full bg-background/95 backdrop-blur-sm border-r border-muted-foreground/20 relative", // Removed overflow-hidden
-        isCollapsed && "collapsed",
-        className,
-      )}
-      style={{
-        width: isCollapsed ? "0px" : `${width}px`,
-        minWidth: isCollapsed ? "0px" : "272px",
-        maxWidth: isCollapsed
-          ? "0px"
-          : `${Math.min(window.innerWidth * 0.4, 500)}px`,
-        flexShrink: 0,
-        transition:
-          "width 300ms cubic-bezier(0.4, 0, 0.2, 1), min-width 300ms cubic-bezier(0.4, 0, 0.2, 1), max-width 300ms cubic-bezier(0.4, 0, 0.2, 1), opacity 300ms cubic-bezier(0.4, 0, 0.2, 1), transform 300ms cubic-bezier(0.4, 0, 0.2, 1)",
-      }}
+    <aside
+      className={cn("sidebar", isCollapsed && "collapsed", className)}
+      aria-label="Chat history"
       {...props}
     >
-      <div
-        className={cn(
-          "flex flex-col h-full w-full transition-opacity duration-200",
-          isCollapsed
-            ? "opacity-0 pointer-events-none invisible"
-            : "opacity-100",
-        )}
-        style={{
-          transitionDelay: isCollapsed ? "0ms" : "100ms",
-          display: isCollapsed ? "none" : "flex",
-        }}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-3 py-4 flex-shrink-0">
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onToggleCollapse}
-              className="hover:bg-accent"
+      {isCollapsed ? (
+        /* ── Collapsed icon rail (desktop) ─────────────────────────── */
+        <div className="sidebar-rail flex h-full w-full flex-col items-center gap-1 py-2">
+          <RailButton
+            label={
+              <span className="flex items-center gap-2">
+                Open sidebar
+                <Kbd keys={[modKeyLabel, shiftKeyLabel, "S"]} />
+              </span>
+            }
+            onClick={onToggleCollapse}
+            className="group/logo size-9 rounded-lg hover:bg-sidebar-accent dark:hover:bg-sidebar-accent"
+            aria-label="Open sidebar"
+          >
+            <img
+              src="/favicon.svg"
+              alt=""
+              className="size-6 group-hover/logo:hidden"
+            />
+            <PanelLeftOpenIcon className="hidden size-5 group-hover/logo:block" />
+          </RailButton>
+          <div className="h-2" />
+          <RailButton
+            label="New chat"
+            onClick={onNewChat}
+            disabled={!canChat}
+            aria-label="New chat"
+          >
+            <SquarePenIcon className="size-[18px]" />
+          </RailButton>
+          <RailButton
+            label="Search chats"
+            onClick={onOpenSearch}
+            disabled={!canChat}
+            aria-label="Search chats"
+          >
+            <SearchIcon className="size-[18px]" />
+          </RailButton>
+          <div className="flex-1" />
+          <AccountMenu
+            compact
+            onOpenSettings={onOpenSettings}
+            onOpenShortcuts={onOpenShortcuts}
+          />
+        </div>
+      ) : (
+        /* ── Expanded sidebar ─────────────────────────────────────── */
+        <div className="flex h-full w-full flex-col">
+          {/* Header */}
+          <div className="flex h-[52px] shrink-0 items-center justify-between px-2">
+            <button
+              type="button"
+              onClick={onNewChat}
+              disabled={!canChat}
+              className="flex h-9 items-center gap-2 rounded-lg px-2 hover:bg-sidebar-accent disabled:pointer-events-none"
+              title="New chat"
             >
-              <SidebarIcon className="size-4 mr-1 text-foreground/80" />
-              <h2 className="text-xl font-bold text-foreground/80">SSD AI</h2>
-              <span className="ml-1 mt-3 text-[10px] text-muted-foreground tracking-wide font-light">
+              <img src="/favicon.svg" alt="" className="size-6" />
+              <span className="text-[15px] font-semibold tracking-tight">
+                SSD AI
+              </span>
+              <span className="text-[10px] font-normal text-muted-foreground">
                 v{__APP_VERSION__}
               </span>
-            </Button>
+            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={onToggleCollapse}
+                  className="size-9 rounded-lg text-foreground/70 hover:bg-sidebar-accent dark:hover:bg-sidebar-accent"
+                  aria-label="Close sidebar"
+                >
+                  <PanelLeftCloseIcon className="size-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <span className="flex items-center gap-2">
+                  Close sidebar
+                  <Kbd keys={[modKeyLabel, shiftKeyLabel, "S"]} />
+                </span>
+              </TooltipContent>
+            </Tooltip>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onToggleCollapse}
-            className="h-8 w-8 p-0"
-          >
-            <ChevronLeftIcon className="size-4" />
-          </Button>
-        </div>
 
-        {/* New Chat Button */}
-        <div className="px-3 pt-4 pb-2 flex-shrink-0">
-          <Button
-            variant="outline"
-            onClick={onNewChat}
-            disabled={!isAuthenticated || isCheckingAuth}
-            title={
-              !isAuthenticated ? "Sign in to start a chat" : "Start a new chat"
-            }
-            className="w-full justify-start gap-2 rounded-lg text-foreground/80 font-semibold"
-          >
-            <PlusIcon className="size-4 text-foreground/80" />
-            New Chat
-          </Button>
-        </div>
+          {/* Primary actions */}
+          <nav className="shrink-0 space-y-0.5 px-2 pb-2">
+            <NavRow
+              icon={<SquarePenIcon />}
+              label="New chat"
+              shortcut={[modKeyLabel, shiftKeyLabel, "O"]}
+              onClick={onNewChat}
+              disabled={!canChat}
+            />
+            <NavRow
+              icon={<SearchIcon />}
+              label="Search chats"
+              shortcut={[modKeyLabel, "K"]}
+              onClick={onOpenSearch}
+              disabled={!canChat}
+            />
+          </nav>
 
-        {/* Search Input */}
-        <div className="px-3 pt-3 flex-shrink-0">
-          <div className="relative">
-            {ftsLoading ? (
-              <Loader2Icon className="absolute left-2 top-2.5 size-4 text-muted-foreground animate-spin pointer-events-none" />
-            ) : (
-              <SearchIcon className="absolute left-2 top-2.5 size-4 text-muted-foreground pointer-events-none" />
-            )}
-            <Input
-              placeholder="Search titles & messages…"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8 h-9 text-sm border-0 border-b rounded-none focus-visible:ring-0 focus-visible:border-muted-foreground !bg-transparent"
+          {/* Conversations */}
+          <div className="relative min-h-0 flex-1">
+            <ScrollArea className="h-full" type="scroll" viewportRef={scrollRef}>
+              {(isCheckingAuth || isLoading) &&
+              conversations.length === 0 ? (
+                <div className="space-y-2 px-4 py-4">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="h-4 animate-pulse rounded bg-sidebar-accent"
+                      style={{ width: `${85 - i * 9}%` }}
+                    />
+                  ))}
+                </div>
+              ) : conversations.length === 0 ? (
+                <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  {isAuthenticated
+                    ? "Your chats will appear here."
+                    : "Sign in to see your chats."}
+                </div>
+              ) : (
+                <div className="px-2 pb-4">
+                  <div
+                    className="relative w-full"
+                    style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
+                  >
+                    {rowVirtualizer.getVirtualItems().map((virtualItem) => {
+                      const item = flatItems[virtualItem.index];
+                      if (!item) return null;
+                      const isActive =
+                        item.type === "item" &&
+                        activeConversationId === item.data.id;
+                      const isMenuOpen =
+                        item.type === "item" && menuOpenId === item.data.id;
+
+                      return (
+                        <div
+                          key={virtualItem.key}
+                          data-index={virtualItem.index}
+                          ref={rowVirtualizer.measureElement}
+                          className="absolute top-0 left-0 w-full"
+                          style={{
+                            transform: `translateY(${virtualItem.start}px)`,
+                          }}
+                        >
+                          {item.type === "header" ? (
+                            <h3 className="px-2.5 pt-5 pb-1.5 text-xs font-medium text-muted-foreground">
+                              {item.label}
+                            </h3>
+                          ) : editingId === item.data.id ? (
+                            <div className="py-px">
+                              <input
+                                value={editingTitle}
+                                onChange={(e) =>
+                                  setEditingTitle(e.target.value)
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    handleSaveRename(item.data.id);
+                                  } else if (e.key === "Escape") {
+                                    handleCancelRename();
+                                  }
+                                }}
+                                onBlur={() => handleSaveRename(item.data.id)}
+                                className="h-9 w-full rounded-lg border border-ring/60 bg-background px-2.5 text-sm outline-none"
+                                autoFocus
+                                onFocus={(e) => e.currentTarget.select()}
+                              />
+                            </div>
+                          ) : (
+                            <div
+                              className={cn(
+                                "group/item relative flex h-9 items-center rounded-lg",
+                                isActive || isMenuOpen
+                                  ? "bg-sidebar-accent"
+                                  : "hover:bg-sidebar-accent",
+                              )}
+                            >
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onConversationSelect?.(item.data.id)
+                                }
+                                onDoubleClick={() => {
+                                  setEditingId(item.data.id);
+                                  setEditingTitle(item.data.title);
+                                }}
+                                className="h-full min-w-0 flex-1 rounded-lg px-2.5 text-left text-sm"
+                                title={item.data.title}
+                              >
+                                <span
+                                  className={cn(
+                                    "block truncate",
+                                    "group-hover/item:[mask-image:linear-gradient(to_right,black_75%,transparent)]",
+                                    (isActive || isMenuOpen) &&
+                                      "[mask-image:linear-gradient(to_right,black_75%,transparent)]",
+                                  )}
+                                >
+                                  {item.data.title || "New chat"}
+                                </span>
+                              </button>
+                              <DropdownMenu
+                                open={isMenuOpen}
+                                onOpenChange={(o) =>
+                                  setMenuOpenId(o ? item.data.id : null)
+                                }
+                              >
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    type="button"
+                                    aria-label="Chat options"
+                                    className={cn(
+                                      "absolute right-1 flex size-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground",
+                                      "opacity-0 group-hover/item:opacity-100 focus-visible:opacity-100",
+                                      (isActive || isMenuOpen) && "opacity-100",
+                                      "max-md:opacity-100",
+                                    )}
+                                  >
+                                    <MoreHorizontalIcon className="size-4" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent
+                                  align="start"
+                                  side="bottom"
+                                  className="min-w-44"
+                                >
+                                  <DropdownMenuItem
+                                    onSelect={() => togglePin(item.data.id)}
+                                  >
+                                    {item.pinned ? (
+                                      <PinOffIcon />
+                                    ) : (
+                                      <PinIcon />
+                                    )}
+                                    {item.pinned ? "Unpin" : "Pin"}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onSelect={() => {
+                                      setEditingId(item.data.id);
+                                      setEditingTitle(item.data.title);
+                                    }}
+                                  >
+                                    <PencilIcon />
+                                    Rename
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onSelect={() =>
+                                      onDeleteConversation?.(item.data.id)
+                                    }
+                                    className="text-destructive focus:text-destructive [&_svg]:!text-destructive"
+                                  >
+                                    <TrashIcon />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </ScrollArea>
+          </div>
+
+          {/* Account */}
+          <div className="shrink-0 border-t border-border/60 p-2">
+            <AccountMenu
+              onOpenSettings={onOpenSettings}
+              onOpenShortcuts={onOpenShortcuts}
             />
           </div>
         </div>
-
-        {/* Conversations List */}
-        <div
-          className="flex-1 min-h-0"
-          style={{
-            maskImage:
-              "linear-gradient(to bottom, black 90%, transparent 100%)",
-            WebkitMaskImage:
-              "linear-gradient(to bottom, black 90%, transparent 100%)",
-          }}
-        >
-          <ScrollArea className="h-full" type="scroll" viewportRef={scrollRef}>
-            {(isCheckingAuth || isLoading) &&
-            conversations.length === 0 ? null : conversations.length === 0 ? (
-              <div className="px-3 py-4">
-                <div className="text-center py-8 text-muted-foreground text-sm">
-                  {isAuthenticated ? (
-                    <>
-                      No conversations yet.
-                      <br />
-                      Start a new chat to begin.
-                    </>
-                  ) : (
-                    <>
-                      Sign in to load your conversations.
-                      <br />
-                      Use the button below to continue.
-                    </>
-                  )}
-                </div>
-              </div>
-            ) : showEmptySearch ? (
-              <div className="px-3 py-4">
-                <div className="text-center py-8 text-muted-foreground text-sm">
-                  No matching conversations found.
-                </div>
-              </div>
-            ) : (
-              <div
-                className={cn(
-                  "px-3 py-4 transition-opacity duration-100",
-                  isSearchPending && "opacity-70",
-                )}
-              >
-                <div
-                  className="relative w-full"
-                  style={{
-                    height: `${rowVirtualizer.getTotalSize()}px`,
-                  }}
-                >
-                  {rowVirtualizer.getVirtualItems().map((virtualItem) => {
-                    const item = flatItems[virtualItem.index];
-
-                    return (
-                      <div
-                        key={virtualItem.key}
-                        data-index={virtualItem.index}
-                        ref={rowVirtualizer.measureElement}
-                        style={{
-                          position: "absolute",
-                          top: 0,
-                          left: 0,
-                          width: "100%",
-                          transform: `translateY(${virtualItem.start}px)`,
-                        }}
-                      >
-                        {item.type === "header" ? (
-                          <h3 className="px-1 text-xs font-semibold text-muted-foreground/70 pb-2 pt-4">
-                            {item.label}
-                          </h3>
-                        ) : (
-                          <div
-                            className={cn(
-                              // No animate-fade-in while filtering — CSS animations
-                              // on remounted rows are a major source of typing jank.
-                              "group relative w-full rounded-lg transition-colors py-[0.1rem]",
-                              !isSearching && "animate-fade-in",
-                              activeConversationId === item.data.id
-                                ? "bg-secondary/80"
-                                : "hover:bg-secondary/80",
-                            )}
-                          >
-                            {editingId === item.data.id ? (
-                              <div className="flex items-center gap-2">
-                                <Input
-                                  value={editingTitle}
-                                  onChange={(e) =>
-                                    setEditingTitle(e.target.value)
-                                  }
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") {
-                                      handleSaveRename(item.data.id);
-                                    } else if (e.key === "Escape") {
-                                      handleCancelRename();
-                                    }
-                                  }}
-                                  onBlur={() => handleSaveRename(item.data.id)}
-                                  className="flex-1 text-sm border-0"
-                                  autoFocus
-                                />
-                              </div>
-                            ) : (
-                              <div className="flex items-center group/item">
-                                <Button
-                                  variant="ghost"
-                                  onClick={() =>
-                                    onConversationSelect?.(item.data.id)
-                                  }
-                                  className={cn(
-                                    "flex-1 justify-start h-auto p-2 text-left hover:!bg-transparent max-w-[240px] transition-all !duration-100 ease-in-out",
-                                    "group-hover/item:max-w-[210px] group-focus-within/item:max-w-[210px]",
-                                    activeConversationId === item.data.id &&
-                                      "max-w-[210px]",
-                                  )}
-                                >
-                                  <div className="flex flex-col gap-0.5 w-full min-w-0">
-                                    <span className="text-sm flex-1 truncate text-foreground/80">
-                                      {item.data.title}
-                                    </span>
-                                    {item.data.searchSnippet ? (
-                                      <SearchSnippet
-                                        snippet={item.data.searchSnippet}
-                                      />
-                                    ) : null}
-                                  </div>
-                                </Button>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className={cn(
-                                        "h-8 w-8 p-0 shrink-0 absolute right-2 top-1/2 -translate-y-1/2 hover:!bg-secondary",
-                                        "opacity-0 pointer-events-none",
-                                        "group-hover/item:opacity-100 group-hover/item:pointer-events-auto",
-                                        "group-focus-within/item:opacity-100 group-focus-within/item:pointer-events-auto",
-                                        // Always show for the open conversation (touch-friendly).
-                                        activeConversationId === item.data.id &&
-                                          "opacity-100 pointer-events-auto",
-                                      )}
-                                    >
-                                      <MoreHorizontalIcon className="size-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem
-                                      onClick={() =>
-                                        handleRename(
-                                          item.data.id,
-                                          item.data.title,
-                                        )
-                                      }
-                                    >
-                                      <PencilIcon className="size-4 mr-2" />
-                                      Rename
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onClick={() => handleDelete(item.data.id)}
-                                      className="text-destructive focus:text-destructive"
-                                    >
-                                      <TrashIcon className="size-4 mr-2" />
-                                      Delete
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </ScrollArea>
-        </div>
-
-        {/* Login/Logout Section */}
-        <div className="px-3 pb-4 flex-shrink-0 font-semibold text-foreground/80">
-          <AuthButton />
-        </div>
-      </div>
-    </div>
+      )}
+    </aside>
   );
 };
 
-const AuthButton = () => {
+/** Profile button + menu at the bottom of the sidebar (ChatGPT-style). */
+const AccountMenu = ({
+  compact = false,
+  onOpenSettings,
+  onOpenShortcuts,
+}: {
+  compact?: boolean;
+  onOpenSettings?: () => void;
+  onOpenShortcuts?: () => void;
+}) => {
   const { isAuthenticated, isCheckingAuth, logout, isLoading } = useAuth();
+  const { theme, setTheme } = useTheme();
   const [loginOpen, setLoginOpen] = useState(false);
 
   useEffect(() => {
@@ -639,43 +532,111 @@ const AuthButton = () => {
     }
   }, [isAuthenticated, isCheckingAuth]);
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } catch (err) {
-      console.error("Logout failed:", err);
-    }
-  };
+  if (isCheckingAuth) {
+    return <div className={compact ? "size-9" : "h-11"} />;
+  }
 
-  if (isCheckingAuth) return null;
-
-  if (isAuthenticated) {
+  if (!isAuthenticated) {
     return (
-      <Button
-        variant="outline"
-        onClick={handleLogout}
-        disabled={isLoading}
-        className="w-full justify-start rounded-lg gap-2"
-      >
-        {isLoading ? (
-          <div className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+      <LoginDialog open={loginOpen} onOpenChange={setLoginOpen}>
+        {compact ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-9 rounded-lg"
+            aria-label="Log in"
+          >
+            <LogInIcon className="size-[18px]" />
+          </Button>
         ) : (
-          <LogOutIcon className="size-4" />
+          <Button className="h-10 w-full rounded-full font-medium">
+            <LogInIcon className="size-4" />
+            Log in
+          </Button>
         )}
-        <span>{isLoading ? "Logging out..." : "Logout"}</span>
-      </Button>
+      </LoginDialog>
     );
   }
 
+  const avatar = (
+    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white">
+      <UserIcon className="size-4" />
+    </span>
+  );
+
   return (
-    <LoginDialog open={loginOpen} onOpenChange={setLoginOpen}>
-      <Button
-        variant="outline"
-        className="w-full rounded-lg justify-start gap-2"
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        {compact ? (
+          <button
+            type="button"
+            aria-label="Account"
+            className="flex size-9 items-center justify-center rounded-lg hover:bg-sidebar-accent"
+          >
+            {avatar}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="flex h-11 w-full items-center gap-2.5 rounded-lg px-2 text-left hover:bg-sidebar-accent data-[state=open]:bg-sidebar-accent"
+          >
+            {avatar}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium">
+                Account
+              </span>
+            </span>
+            <ChevronsUpDownIcon className="size-4 text-muted-foreground" />
+          </button>
+        )}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        side={compact ? "right" : "top"}
+        align={compact ? "end" : "start"}
+        className={cn("min-w-60", !compact && "min-w-(--radix-dropdown-menu-trigger-width)")}
       >
-        <LogInIcon className="size-4" />
-        Login
-      </Button>
-    </LoginDialog>
+        <DropdownMenuItem onSelect={() => onOpenSettings?.()}>
+          <SettingsIcon />
+          Settings
+        </DropdownMenuItem>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <SunMoonIcon />
+            Theme
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="min-w-36">
+            <DropdownMenuRadioGroup
+              value={theme}
+              onValueChange={(v) => setTheme(v as Theme)}
+            >
+              <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+        <DropdownMenuItem onSelect={() => onOpenShortcuts?.()}>
+          <KeyboardIcon />
+          <span className="whitespace-nowrap">Keyboard shortcuts</span>
+          <Kbd keys={[modKeyLabel, "/"]} className="ml-auto max-md:hidden" />
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <a href="/api/gateway-health/" target="_blank" rel="noopener">
+            <ActivityIcon />
+            Gateway status
+          </a>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          disabled={isLoading}
+          onSelect={() => {
+            logout().catch((err) => console.error("Logout failed:", err));
+          }}
+        >
+          <LogOutIcon />
+          {isLoading ? "Logging out..." : "Log out"}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 };

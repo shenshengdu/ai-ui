@@ -1,15 +1,31 @@
-import { useEffect, useLayoutEffect, useMemo, useState, useRef } from "react";
-import { ThemeToggle } from "@/components/theme-toggle";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+  useRef,
+} from "react";
 import { Button } from "@/components/ui/button";
 import { ConversationSidebar } from "@/components/ai-elements/conversation-sidebar";
-import { ChatInterface } from "@/components/ChatInterface";
+import { SearchChatsDialog } from "@/components/ai-elements/search-chats-dialog";
+import {
+  ChatInterface,
+  type ChatInterfaceHandle,
+} from "@/components/ChatInterface";
+import { ShortcutsDialog } from "@/components/shortcuts-dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useConversations } from "@/hooks/useConversations";
 import { useAuth } from "@/hooks/useAuth";
+import { usePinnedConversations } from "@/hooks/usePinnedConversations";
 import { SettingsDialog } from "@/components/settings";
 import { Attachment } from "@/lib/api/types";
 import { NavigateFunction, useNavigate, useParams } from "react-router-dom";
+import { hasModKey, isMobileViewport } from "@/lib/platform";
 
-import { ActivityIcon, MessageSquareIcon, SettingsIcon } from "lucide-react";
+import { XIcon } from "lucide-react";
+
+const SIDEBAR_STATE_KEY = "ai-ui-sidebar-collapsed";
 
 function historyIdx(): number {
   return typeof window.history.state?.idx === "number"
@@ -39,9 +55,20 @@ function App() {
   const { convId } = useParams<{ convId?: string }>();
   const navigate = useNavigate();
   const [webSearch, setWebSearch] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(
-    window.innerWidth < 768,
-  );
+  // Desktop remembers the user's choice; mobile always starts closed.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (isMobileViewport()) return true;
+    try {
+      return localStorage.getItem(SIDEBAR_STATE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const chatRef = useRef<ChatInterfaceHandle>(null);
+  const { unpin } = usePinnedConversations();
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [lastMessageSignature, setLastMessageSignature] = useState<string>("");
@@ -238,24 +265,42 @@ function App() {
     }
   };
 
+  const closeDrawerOnMobile = () => {
+    if (isMobileViewport()) setSidebarCollapsed(true);
+  };
+
   const handleNewChat = () => {
     if (convId) {
       goToNewChat(navigate);
     }
     setWebSearch(false);
     clearError();
+    closeDrawerOnMobile();
+    // Land the cursor in the composer, like ChatGPT.
+    requestAnimationFrame(() => chatRef.current?.focusComposer());
   };
 
   const handleConversationSelect = (conversationId: string) => {
+    closeDrawerOnMobile();
     if (conversationId === convId) {
       return;
     }
     navigate(`/c/${conversationId}`, { replace: Boolean(convId) });
   };
 
-  const handleToggleSidebar = () => {
-    setSidebarCollapsed(!sidebarCollapsed);
-  };
+  const handleToggleSidebar = useCallback(() => {
+    setSidebarCollapsed((collapsed) => {
+      const next = !collapsed;
+      if (!isMobileViewport()) {
+        try {
+          localStorage.setItem(SIDEBAR_STATE_KEY, next ? "1" : "0");
+        } catch {
+          /* ignore */
+        }
+      }
+      return next;
+    });
+  }, []);
 
   const handleWebSearchToggle = (enabled: boolean) => {
     setWebSearch(enabled);
@@ -264,6 +309,7 @@ function App() {
   const handleDeleteConversation = async (conversationId: string) => {
     try {
       await deleteConversation(conversationId);
+      unpin(conversationId);
       if (convId === conversationId) {
         goToNewChat(navigate);
       }
@@ -271,6 +317,10 @@ function App() {
       console.error("Failed to delete conversation:", error);
     }
   };
+
+  const pendingDeleteTitle = pendingDeleteId
+    ? conversations.find((c) => c.id === pendingDeleteId)?.title
+    : undefined;
 
   const handleRenameConversation = async (
     conversationId: string,
@@ -282,6 +332,54 @@ function App() {
       console.error("Failed to rename conversation:", error);
     }
   };
+
+  // Global keyboard shortcuts (mirrors ChatGPT's set; see ShortcutsDialog).
+  const shortcutStateRef = useRef({
+    handleNewChat,
+    handleToggleSidebar,
+    convId,
+    canChat: isAuthenticated && !isCheckingAuth,
+  });
+  shortcutStateRef.current = {
+    handleNewChat,
+    handleToggleSidebar,
+    convId,
+    canChat: isAuthenticated && !isCheckingAuth,
+  };
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const st = shortcutStateRef.current;
+      const key = e.key.toLowerCase();
+      const mod = hasModKey(e);
+
+      if (mod && e.shiftKey && key === "o") {
+        e.preventDefault();
+        if (st.canChat) st.handleNewChat();
+      } else if (mod && !e.shiftKey && key === "k") {
+        e.preventDefault();
+        if (st.canChat) setSearchOpen((o) => !o);
+      } else if (mod && e.shiftKey && key === "s") {
+        e.preventDefault();
+        st.handleToggleSidebar();
+      } else if (mod && (key === "/" || e.code === "Slash")) {
+        e.preventDefault();
+        setShortcutsOpen((o) => !o);
+      } else if (mod && e.shiftKey && key === "c") {
+        if (chatRef.current?.copyLastResponse()) e.preventDefault();
+      } else if (mod && e.shiftKey && (key === "backspace" || key === "delete")) {
+        if (st.convId) {
+          e.preventDefault();
+          setPendingDeleteId(st.convId);
+        }
+      } else if (e.shiftKey && key === "escape") {
+        e.preventDefault();
+        chatRef.current?.focusComposer();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   // Use convId (URL) as the source of truth for what to display.
   // This prevents the old conversation from briefly flashing during navigation
@@ -306,94 +404,48 @@ function App() {
     return Array.isArray(conversations) ? [...conversations] : [];
   }, [conversations]);
 
+  // Browser tab title follows the open chat.
+  const displayedTitle = displayedConversation?.title;
+  useEffect(() => {
+    document.title = displayedTitle ? `${displayedTitle} · SSD AI` : "SSD AI";
+  }, [displayedTitle]);
+
   return (
     <div
       className="flex fixed inset-0 overflow-hidden overscroll-none"
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
     >
-      {/* Overlay for mobile */}
-      {!sidebarCollapsed && window.innerWidth < 768 && (
+      {/* Overlay for mobile drawer */}
+      {!sidebarCollapsed && (
         <div className="sidebar-overlay" onClick={handleToggleSidebar} />
       )}
 
-      {/* Sidebar */}
       <ConversationSidebar
         conversations={safeConversations}
-        activeConversationId={activeConversationId}
+        activeConversationId={displayedConversation ? activeConversationId : null}
         onConversationSelect={handleConversationSelect}
         onNewChat={handleNewChat}
-        onDeleteConversation={handleDeleteConversation}
+        onDeleteConversation={setPendingDeleteId}
         onRenameConversation={handleRenameConversation}
+        onOpenSearch={() => {
+          closeDrawerOnMobile();
+          setSearchOpen(true);
+        }}
+        onOpenSettings={() => {
+          closeDrawerOnMobile();
+          setShowSettings(true);
+        }}
+        onOpenShortcuts={() => setShortcutsOpen(true)}
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={handleToggleSidebar}
         isLoading={conversationsLoading}
       />
 
       {/* Main Content */}
-      <div className="chat-container overflow-hidden relative">
-        {/* Solid header below lg; floating overlay on lg+ */}
-        <div className="flex justify-between items-center p-4 pb-2 shrink-0 lg:absolute lg:top-0 lg:inset-x-0 lg:z-20 lg:pointer-events-none">
-          <div className="flex items-center gap-3 lg:pointer-events-auto">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleToggleSidebar}
-              className="hover:bg-accent"
-            >
-              <MessageSquareIcon className="size-4" />
-            </Button>
-          </div>
-          <div className="flex items-center gap-2 lg:pointer-events-auto">
-            {isAuthenticated && (
-              <Button
-                asChild
-                variant="ghost"
-                size="sm"
-                className="hover:bg-accent"
-                title="网关模型状态"
-              >
-                <a href="/api/gateway-health/" target="_blank" rel="noopener">
-                  <ActivityIcon className="size-4" />
-                </a>
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowSettings(true)}
-              disabled={!isAuthenticated || isCheckingAuth}
-              className="hover:bg-accent"
-              title="Settings"
-            >
-              <SettingsIcon className="size-4" />
-            </Button>
-            <ThemeToggle />
-          </div>
-        </div>
-
-        {/* Error Display */}
-        {conversationsError && (
-          <div className="flex justify-center px-6 mb-4 lg:absolute lg:top-12 lg:inset-x-0 lg:z-20 lg:mb-0 lg:pointer-events-none">
-            <div className="w-full max-w-3xl p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg lg:pointer-events-auto lg:shadow-sm">
-              <div className="flex justify-between items-center">
-                <p className="text-red-700 dark:text-red-300 text-sm">
-                  {conversationsError}
-                </p>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearError}
-                  className="text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-800/30"
-                >
-                  ✕
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
+      <main className="chat-container overflow-hidden relative">
         <ChatInterface
+          ref={chatRef}
           messages={currentMessages}
           webSearch={webSearch}
           currentConversation={displayedConversation}
@@ -408,8 +460,62 @@ function App() {
           getBranchInfo={getBranchInfo}
           onUpdateMessage={handleUpdateMessage}
           onCancelStream={cancelStream}
+          onToggleSidebar={handleToggleSidebar}
+          onNewChat={handleNewChat}
+          onRequestDeleteConversation={setPendingDeleteId}
+          banner={
+            conversationsError ? (
+              <div className="flex justify-center px-4 pb-2">
+                <div className="flex w-full max-w-3xl items-start gap-3 rounded-2xl border border-destructive/25 bg-destructive/5 px-4 py-3 text-sm text-destructive animate-slide-up">
+                  <p className="flex-1 break-words">{conversationsError}</p>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={clearError}
+                    className="size-6 shrink-0 rounded-full text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    aria-label="Dismiss"
+                  >
+                    <XIcon className="size-4" />
+                  </Button>
+                </div>
+              </div>
+            ) : null
+          }
         />
-      </div>
+      </main>
+
+      <SearchChatsDialog
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        conversations={safeConversations}
+        onSelect={handleConversationSelect}
+        onNewChat={handleNewChat}
+        canSearchServer={isAuthenticated}
+      />
+
+      <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+
+      <ConfirmDialog
+        open={pendingDeleteId !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteId(null);
+        }}
+        title="Delete chat?"
+        description={
+          <>
+            This will delete{" "}
+            <strong className="font-semibold text-foreground">
+              {pendingDeleteTitle || "this chat"}
+            </strong>
+            . This can't be undone.
+          </>
+        }
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => {
+          if (pendingDeleteId) void handleDeleteConversation(pendingDeleteId);
+        }}
+      />
 
       {/* Settings Dialog */}
       <SettingsDialog open={showSettings} onOpenChange={setShowSettings} />

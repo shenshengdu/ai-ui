@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState } from "react";
 
-type Theme = "dark" | "light";
+/** User preference. "system" follows the OS colour scheme (ChatGPT default). */
+export type Theme = "dark" | "light" | "system";
+export type ResolvedTheme = "dark" | "light";
 
 type ThemeProviderProps = {
   children: React.ReactNode;
@@ -10,36 +12,60 @@ type ThemeProviderProps = {
 
 type ThemeProviderState = {
   theme: Theme;
+  resolvedTheme: ResolvedTheme;
   setTheme: (theme: Theme) => void;
 };
 
 const initialState: ThemeProviderState = {
-  theme: "dark",
+  theme: "system",
+  resolvedTheme: "dark",
   setTheme: () => null,
 };
 
 const ThemeProviderContext = createContext<ThemeProviderState>(initialState);
 
+const isTheme = (value: unknown): value is Theme =>
+  value === "light" || value === "dark" || value === "system";
+
+const systemPrefersDark = () =>
+  typeof window !== "undefined" &&
+  window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+
 export function ThemeProvider({
   children,
-  defaultTheme = "dark",
+  defaultTheme = "system",
   storageKey = "vite-ui-theme",
   ...props
 }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>(() => {
-    const stored = localStorage.getItem(storageKey) as Theme;
-    if (stored && (stored === "light" || stored === "dark")) {
-      return stored;
+  const [theme, setThemeState] = useState<Theme>(() => {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (isTheme(stored)) return stored;
+    } catch {
+      /* storage unavailable */
     }
     return defaultTheme;
   });
+  const [systemDark, setSystemDark] = useState<boolean>(systemPrefersDark);
+
+  // Track OS colour-scheme changes so "system" stays live.
+  useEffect(() => {
+    const mql = window.matchMedia?.("(prefers-color-scheme: dark)");
+    if (!mql) return;
+    const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+
+  const resolvedTheme: ResolvedTheme =
+    theme === "system" ? (systemDark ? "dark" : "light") : theme;
 
   useEffect(() => {
     const root = window.document.documentElement;
 
     root.classList.remove("light", "dark");
-    root.classList.add(theme);
-    root.style.colorScheme = theme;
+    root.classList.add(resolvedTheme);
+    root.style.colorScheme = resolvedTheme;
 
     // Mobile browser / PWA chrome (status + nav bars) follow theme-color, not CSS.
     const applyChromeColor = () => {
@@ -53,7 +79,7 @@ export function ThemeProvider({
       if (apple) {
         apple.setAttribute(
           "content",
-          theme === "dark" ? "black-translucent" : "default",
+          resolvedTheme === "dark" ? "black-translucent" : "default",
         );
       }
     };
@@ -61,13 +87,18 @@ export function ThemeProvider({
     // Wait a frame so theme CSS variables are applied before reading background.
     const id = requestAnimationFrame(applyChromeColor);
     return () => cancelAnimationFrame(id);
-  }, [theme]);
+  }, [resolvedTheme]);
 
-  const value = {
+  const value: ThemeProviderState = {
     theme,
-    setTheme: (theme: Theme) => {
-      localStorage.setItem(storageKey, theme);
-      setTheme(theme);
+    resolvedTheme,
+    setTheme: (next: Theme) => {
+      try {
+        localStorage.setItem(storageKey, next);
+      } catch {
+        /* storage unavailable */
+      }
+      setThemeState(next);
     },
   };
 

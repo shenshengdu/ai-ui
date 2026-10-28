@@ -34,6 +34,10 @@ export interface ModelSelectProps {
   triggerClassName?: string;
   contentClassName?: string;
   showCount?: boolean;
+  /** Custom trigger content for the selected model (defaults to the item). */
+  renderValue?: (model: ModelOption) => React.ReactNode;
+  /** Popover alignment relative to the trigger. */
+  align?: "start" | "center" | "end";
 }
 
 export const ModelSelect = ({
@@ -52,6 +56,8 @@ export const ModelSelect = ({
   triggerClassName,
   contentClassName,
   showCount = false,
+  renderValue,
+  align,
 }: ModelSelectProps) => {
   const selectValue =
     typeof value === "string" && value.length > 0 ? value : undefined;
@@ -80,6 +86,9 @@ export const ModelSelect = ({
   };
 
   const isDisabled = disabled;
+  const selectedModel = selectValue
+    ? models.find((m) => m.id === selectValue)
+    : undefined;
 
   return (
     <Select value={selectValue} onValueChange={onChange} disabled={isDisabled}>
@@ -95,12 +104,15 @@ export const ModelSelect = ({
           triggerClassName,
         )}
       >
-        <SelectValue placeholder={computedPlaceholder} />
+        <SelectValue placeholder={computedPlaceholder}>
+          {renderValue && selectedModel ? renderValue(selectedModel) : undefined}
+        </SelectValue>
       </SelectTrigger>
 
       <SelectContent
+        align={align}
         className={cn(
-          "max-h-72 min-w-[240px] overflow-auto rounded-xl border border-border/70 p-1 shadow-xl",
+          "max-h-[min(420px,70vh)] min-w-[280px] overflow-auto rounded-2xl border border-border bg-popover p-1.5 shadow-lg",
           contentClassName,
         )}
       >
@@ -124,7 +136,7 @@ export const ModelSelect = ({
               <SelectItem
                 key={modelOption.id}
                 value={modelOption.id}
-                className="rounded-lg px-3 py-2.5 text-sm leading-5 focus:bg-muted-foreground/10"
+                className="rounded-xl px-3 py-2.5 text-sm leading-5 focus:bg-accent"
               >
                 <div className="max-w-[340px] overflow-hidden select-none translate-y-[-2px]">
                   <div className="flex items-center gap-1.5 flex-wrap min-w-0">

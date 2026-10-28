@@ -21,7 +21,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content"
     />
-    <meta name="theme-color" content="#19191a" />
+    <meta name="theme-color" content="#212121" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta
       name="apple-mobile-web-app-status-bar-style"
@@ -49,8 +49,17 @@
     <script>
       (function () {
         const stored = localStorage.getItem("ai-ui-theme");
+        const pref =
+          stored === "light" || stored === "dark" || stored === "system"
+            ? stored
+            : "system";
         const theme =
-          stored === "light" || stored === "dark" ? stored : "dark";
+          pref === "system"
+            ? window.matchMedia &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light"
+            : pref;
         document.documentElement.className = theme;
         document.documentElement.style.colorScheme = theme;
         // Keep status/nav bar in sync before React hydrates.
@@ -58,7 +67,7 @@
         if (meta) {
           meta.setAttribute(
             "content",
-            theme === "light" ? "hsl(0 10% 98%)" : "#19191a",
+            theme === "light" ? "#ffffff" : "#212121",
           );
         }
         const apple = document.querySelector(
@@ -78,8 +87,8 @@
       }
 
       html:not(.light) body {
-        background-color: hsl(240 0% 10%) !important;
-        color: hsl(0 0% 98%) !important;
+        background-color: #212121 !important;
+        color: #ececec !important;
       }
     </style>
   </head>

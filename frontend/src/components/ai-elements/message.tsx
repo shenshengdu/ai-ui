@@ -16,10 +16,10 @@ export const Message = ({
 }: MessageProps) => (
   <div
     className={cn(
-      "group flex w-full items-start gap-2 py-6 animate-fade-in",
+      "group flex w-full items-start gap-2 py-2 animate-fade-in",
       from === "user" ? "is-user justify-end" : "is-assistant justify-start",
       from === "user"
-        ? "[&>div]:max-w-[85%] sm:[&>div]:max-w-[75%] md:[&>div]:max-w-[65%] lg:[&>div]:max-w-[60%]"
+        ? "[&>div]:max-w-[85%] sm:[&>div]:max-w-[75%] md:[&>div]:max-w-[70%]"
         : "[&>div]:max-w-full",
       error && "is-error",
       className,
@@ -42,14 +42,14 @@ export const MessageContent = ({
     className={cn(
       "flex flex-col gap-2 text-base text-foreground overflow-hidden max-w-full",
       "[line-height:1.75rem]",
-      "group-[.is-user]:bg-secondary/80 group-[.is-user]:text-secondary-foreground group-[.is-user]:rounded-2xl group-[.is-user]:px-3 group-[.is-user]:py-2 sm:group-[.is-user]:px-4 sm:group-[.is-user]:py-3 group-[.is-user]:w-fit group-[.is-user]:min-w-0",
+      "group-[.is-user]:bg-bubble group-[.is-user]:text-foreground group-[.is-user]:rounded-[22px] group-[.is-user]:px-4 group-[.is-user]:py-2.5 group-[.is-user]:w-fit group-[.is-user]:min-w-0",
       "group-[.is-assistant]:bg-transparent group-[.is-assistant]:text-foreground group-[.is-assistant]:px-0 group-[.is-assistant]:py-0 group-[.is-assistant]:w-full group-[.is-assistant]:min-w-0",
-      "group-[.is-error]:bg-destructive/10 group-[.is-error]:border group-[.is-error]:border-destructive/20 group-[.is-error]:rounded-lg group-[.is-error]:px-3 group-[.is-error]:py-2 sm:group-[.is-error]:px-4 sm:group-[.is-error]:py-3 group-[.is-error]:w-fit group-[.is-error]:min-w-0",
+      "group-[.is-error.is-user]:bg-transparent group-[.is-error.is-user]:p-0",
       className,
     )}
     {...props}
   >
-    <div className="group-[.is-user]:dark space-y-4 overflow-hidden break-words w-full">
+    <div className="space-y-2 overflow-hidden break-words w-full">
       {children}
     </div>
   </div>

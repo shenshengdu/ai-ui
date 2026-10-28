@@ -72,7 +72,7 @@ const isDevelopment = (import.meta as any).env.DEV;
 // AuthProvider must be outermost so auth state is available to guard components
 const AppTree = (
   <AuthProvider>
-    <ThemeProvider defaultTheme="dark" storageKey="ai-ui-theme">
+    <ThemeProvider defaultTheme="system" storageKey="ai-ui-theme">
       <ChatGPTOAuthWaitingDialog />
       <AuthGuard>
         <BrowserRouter>

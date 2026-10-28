@@ -125,7 +125,7 @@ export const FilePreview = ({
   return (
     <div
       className={cn(
-        "flex items-center gap-2 p-2 bg-muted/50 rounded-lg border",
+        "flex items-center gap-2 p-2 bg-background/60 rounded-xl border",
         "max-w-xs",
         className,
       )}

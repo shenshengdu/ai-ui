@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2Icon, SendIcon, SquareIcon, XIcon } from "lucide-react";
+import { ArrowUpIcon, Loader2Icon, SquareIcon } from "lucide-react";
 import type {
   ComponentProps,
   HTMLAttributes,
@@ -34,7 +34,7 @@ export type PromptInputProps = HTMLAttributes<HTMLFormElement>;
 export const PromptInput = ({ className, ...props }: PromptInputProps) => (
   <form
     className={cn(
-      "w-full divide-y overflow-hidden rounded-3xl border bg-secondary/50 shadow-sm",
+      "w-full overflow-hidden rounded-[28px] border border-border bg-composer bg-clip-padding shadow-[0_4px_20px_-4px_rgba(0,0,0,0.08)] transition-shadow focus-within:shadow-[0_6px_24px_-4px_rgba(0,0,0,0.12)] dark:border-transparent dark:shadow-none",
       className,
     )}
     {...props}
@@ -183,7 +183,7 @@ export const PromptInputTextarea = forwardRef<
         rows={1}
         ref={setRefs}
         className={cn(
-          "w-full resize-none rounded-none border-none py-3 px-5 shadow-none outline-none ring-0",
+          "w-full resize-none rounded-none border-none px-5 pt-4 pb-1 text-base shadow-none outline-none ring-0 placeholder:text-muted-foreground/80",
           "bg-transparent dark:bg-transparent overflow-hidden transition-[height] duration-150 ease-in-out",
           "focus-visible:ring-0",
           getTextDirection(inputValue),
@@ -210,7 +210,7 @@ export const PromptInputToolbar = ({
 }: PromptInputToolbarProps) => (
   <div
     className={cn(
-      "flex items-center justify-between border-none py-1.5 px-1.5",
+      "flex items-center justify-between border-none px-2.5 pt-1 pb-2.5",
       className,
     )}
     {...props}
@@ -267,22 +267,22 @@ export const PromptInputSubmit = ({
   onStop,
   ...props
 }: PromptInputSubmitProps) => {
-  let Icon = <SendIcon className="size-4" />;
+  // ChatGPT-style: ↑ to send, ■ to stop.
+  let Icon = <ArrowUpIcon className="size-5" strokeWidth={2.25} />;
 
   if (status === "submitted") {
     Icon = <Loader2Icon className="size-4 animate-spin" />;
   } else if (status === "streaming") {
-    Icon = <SquareIcon className="size-4 fill-current" />;
-  } else if (status === "error") {
-    Icon = <XIcon className="size-4" />;
+    Icon = <SquareIcon className="size-3.5 fill-current" />;
   }
 
   if (status === "streaming" && onStop) {
     return (
       <Button
-        className={cn("gap-1.5 rounded-full", className)}
+        className={cn("size-9 gap-1.5 rounded-full", className)}
         size={size}
         type="button"
+        aria-label="Stop generating"
         variant={variant}
         onClick={onStop}
         {...props}
@@ -294,9 +294,13 @@ export const PromptInputSubmit = ({
 
   return (
     <Button
-      className={cn("gap-1.5 rounded-full", className)}
+      className={cn(
+        "size-9 gap-1.5 rounded-full disabled:bg-foreground/15 disabled:text-background disabled:opacity-100 dark:disabled:bg-foreground/20",
+        className,
+      )}
       size={size}
       type="submit"
+      aria-label="Send message"
       variant={variant}
       {...props}
     >

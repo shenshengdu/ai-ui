@@ -133,16 +133,16 @@ export const CodeBlock = ({
     <CodeBlockContext.Provider value={{ code }}>
       <div
         className={cn(
-          "relative w-full max-w-full overflow-hidden rounded-xl border bg-[hsl(var(--code-background))] text-foreground",
+          "relative w-full max-w-full overflow-hidden rounded-2xl border border-border/70 bg-[hsl(var(--code-background))] text-foreground",
           className,
         )}
         {...props}
       >
-        <div className="flex items-center justify-between p-1 pb-0">
-          <span className="text-xs font-medium text-muted-foreground px-3">
-            {language}
+        <div className="flex h-10 items-center justify-between pl-4 pr-2 select-none">
+          <span className="text-xs font-medium text-muted-foreground lowercase">
+            {language || "text"}
           </span>
-          <div className="flex items-center gap-2">{children}</div>
+          <div className="flex items-center gap-1">{children}</div>
         </div>
         <div className="relative">
           {canHighlight ? (
@@ -152,8 +152,9 @@ export const CodeBlock = ({
                 style={oneLight}
                 customStyle={{
                   margin: 0,
-                  padding: "0 1rem 1rem",
-                  fontSize: "1rem",
+                  padding: "0.25rem 1rem 1rem",
+                  fontSize: "0.875rem",
+                  lineHeight: "1.6",
                   background: "hsl(var(--code-background))",
                   color: "hsl(var(--foreground))",
                   overflowX: "auto",
@@ -166,7 +167,7 @@ export const CodeBlock = ({
                   minWidth: "2.5rem",
                 }}
                 codeTagProps={{
-                  className: "font-mono text-base",
+                  className: "font-mono text-sm",
                 }}
                 className="dark:hidden overflow-x-auto"
                 wrapLongLines={false}
@@ -178,8 +179,9 @@ export const CodeBlock = ({
                 style={oneDark}
                 customStyle={{
                   margin: 0,
-                  padding: "0 1rem 1rem",
-                  fontSize: "1rem",
+                  padding: "0.25rem 1rem 1rem",
+                  fontSize: "0.875rem",
+                  lineHeight: "1.6",
                   background: "hsl(var(--code-background))",
                   color: "hsl(var(--foreground))",
                   overflowX: "auto",
@@ -192,7 +194,7 @@ export const CodeBlock = ({
                   minWidth: "2.5rem",
                 }}
                 codeTagProps={{
-                  className: "font-mono text-base",
+                  className: "font-mono text-sm",
                 }}
                 className="hidden dark:block overflow-x-auto"
                 wrapLongLines={false}
@@ -201,7 +203,7 @@ export const CodeBlock = ({
               </PrismAsyncLight>
             </>
           ) : (
-            <pre className="overflow-x-auto p-4 pt-0 font-mono text-base">
+            <pre className="overflow-x-auto px-4 pt-1 pb-4 font-mono text-sm leading-[1.6]">
               {code}
             </pre>
           )}
@@ -248,13 +250,22 @@ export const CodeBlockCopyButton = ({
 
   return (
     <Button
-      className={cn("shrink-0", className)}
+      className={cn(
+        "h-7 shrink-0 gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground hover:text-foreground",
+        className,
+      )}
       onClick={copyToClipboard}
-      size="icon"
+      size="sm"
       variant="ghost"
+      aria-label={isCopied ? "Copied" : "Copy code"}
       {...props}
     >
-      {children ?? <Icon size={14} />}
+      {children ?? (
+        <>
+          <Icon className="size-3.5" />
+          {isCopied ? "Copied" : "Copy"}
+        </>
+      )}
     </Button>
   );
 };
