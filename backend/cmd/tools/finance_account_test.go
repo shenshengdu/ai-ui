@@ -10,6 +10,7 @@ func TestFinanceAccountPath(t *testing.T) {
 	}{
 		{"", "", "", "", "", 0, "/api/v1/ibkr/summary"},
 		{"portfolio", "", "", "", "", 0, "/api/v1/ibkr/portfolio"},
+		{"live", "", "", "", "", 0, "/api/v1/ibkr/live"},
 		{"income", "", "", "2026-01-01", "", 0, "/api/v1/ibkr/income?from=2026-01-01"},
 		{"transactions", "", "aapl", "", "", 0, "/api/v1/ibkr/transactions?kind=trades&limit=100&symbol=AAPL"},
 		{"transactions", "cash", "", "2026-01-01", "2026-06-30", 20, "/api/v1/ibkr/transactions?from=2026-01-01&kind=cash&limit=20&to=2026-06-30"},
