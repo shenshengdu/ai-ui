@@ -36,14 +36,14 @@ var financeHTTPClient = &http.Client{}
 
 func isFinanceTool(name string) bool {
 	switch name {
-	case "finance_stock", "finance_technical", "finance_valuation", "finance_market", "finance_market_news", "finance_decision", "finance_quote", "finance_global_market", "finance_peer_compare", "finance_peer_group_save", "finance_peer_quant", "finance_warmup_status":
+	case "finance_stock", "finance_technical", "finance_valuation", "finance_market", "finance_market_news", "finance_decision", "finance_quote", "finance_global_market", "finance_peer_compare", "finance_peer_group_save", "finance_peer_quant", "finance_warmup_status", "finance_account":
 		return true
 	}
 	return false
 }
 
 func financeBuiltInTools() []*Tool {
-	return append(financeBaseTools(), financeQuickTools()...)
+	return append(append(financeBaseTools(), financeQuickTools()...), financeAccountTools()...)
 }
 
 func financeBaseTools() []*Tool {
@@ -165,6 +165,10 @@ func financeTool(ctx context.Context, name, args string) providers.ToolOutput {
 		UserConfirmed   bool              `json:"user_confirmed"`
 		Note            string            `json:"note"`
 		Evidence        map[string]string `json:"evidence"`
+		View            string            `json:"view"`
+		Kind            string            `json:"kind"`
+		From            string            `json:"from"`
+		To              string            `json:"to"`
 	}
 	if strings.TrimSpace(args) != "" {
 		if err := json.Unmarshal([]byte(args), &p); err != nil {
@@ -340,6 +344,12 @@ func financeTool(ctx context.Context, name, args string) providers.ToolOutput {
 		path, timeout = "/api/v1/quote/"+url.PathEscape(sym), 15*time.Second
 	case "finance_global_market":
 		path, timeout = "/api/v1/market", 30*time.Second
+	case "finance_account":
+		ap, aerr := financeAccountPath(p.View, p.Kind, p.Symbol, p.From, p.To, p.Limit)
+		if aerr != nil {
+			return financeError("%v", aerr)
+		}
+		path, timeout = ap, 30*time.Second
 	default:
 		return financeError("unknown tool %s", name)
 	}
