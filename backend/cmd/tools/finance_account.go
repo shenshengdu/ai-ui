@@ -23,10 +23,10 @@ func financeAccountTools() []*Tool {
 			ID:   uuid.New().String(),
 			Name: "finance_account",
 			Description: "查询用户自己的 IBKR（盈透）账户数据。数据来自 IBKR Activity Flex Query，是日终数据（截至返回的 as_of 那个交易日收盘），不是实时的：回答时写明“截至 {as_of} 收盘”，不得说成实时余额；金额注明币种。" +
-				"view：summary=账户概况（净值、现金、前 15 大持仓、最近一天净值变化、MTD/YTD、今年股息利息），问账户/持仓/余额时优先用；" +
+				"view：summary=账户概况（净值、现金、前 15 大持仓、净值变化、已实现/未实现盈亏、今年股息利息），问账户/持仓/余额时优先用；" +
 				"portfolio=全部持仓、各币种现金、净值构成、账户信息；performance=净值变化、MTD/YTD、按股票的已实现/未实现盈亏、MTM、最近 30 天净值；" +
 				"income=股息、代扣税、利息汇总（默认今年）及股息/利息应计、外汇余额；transactions=交易和流水明细（kind 选种类，可按 symbol、日期过滤）。" +
-				"只引用返回的数字，不得自行估算持仓市值或收益；返回 error 或 accounts 为空时如实说明还没有数据。不给买卖建议。",
+				"净值变化、已实现盈亏的统计期间以返回的起止日期为准（如近一年），照写期间。持仓占比：percentOfNAV=占账户净值，percentOfPositions=占全部持仓市值，不要混用，也不要自己重算。只引用返回的数字，不得自行估算持仓市值或收益；返回 error 或 accounts 为空时如实说明还没有数据。不给买卖建议。",
 			InputSchema: `{"type":"object","properties":{` +
 				`"view":{"type":"string","enum":["summary","portfolio","performance","income","transactions"],"description":"要看的内容，默认 summary"},` +
 				`"kind":{"type":"string","enum":["trades","cash","transfers","commissions","fees","corporate"],"description":"view=transactions 时：trades 交易、cash 资金流水、transfers 转账、commissions 佣金、fees 交易费用、corporate 公司行动。默认 trades"},` +
