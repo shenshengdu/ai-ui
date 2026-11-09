@@ -75,9 +75,63 @@ func isRetriableStreamError(err error) bool {
 	return false
 }
 
+// emptyRetryAttempts: extra attempts when the model ends a turn with no text
+// and no tool call (env EMPTY_RETRY_ATTEMPTS, default 2).
+func emptyRetryAttempts() int {
+	if n, err := strconv.Atoi(strings.TrimSpace(os.Getenv("EMPTY_RETRY_ATTEMPTS"))); err == nil && n >= 0 {
+		return n
+	}
+	return 2
+}
+
+// EmptyCompletionNotice is shown (and saved) when every attempt came back empty.
+const EmptyCompletionNotice = "\n\n> ⚠️ 模型连续返回了空回答（没有文字、也没有调用工具）。请重新提问，或换一个模型试试。\n"
+
+func isEmptyCompletion(msg *ChatCompletionMessage) bool {
+	return msg != nil && !msg.Cancelled && strings.TrimSpace(msg.Content) == "" && len(msg.ToolCalls) == 0
+}
+
+// retryEmpty resends the request when a turn ends empty (Gemini sometimes
+// returns nothing, e.g. after a malformed function call). On the gateway the
+// free-model ranker counts the empty answer as a failure, so the retry is
+// usually served by the next-ranked model. If every attempt is empty, a
+// notice is streamed and returned as content instead of ending silently.
+func retryEmpty(params RequestParams, sc utils.StreamClient, msg *ChatCompletionMessage, err error,
+	send func() (*ChatCompletionMessage, error)) (*ChatCompletionMessage, error) {
+	if err != nil || !isEmptyCompletion(msg) {
+		return msg, err
+	}
+	for attempt := 1; attempt <= emptyRetryAttempts(); attempt++ {
+		if params.Context != nil && params.Context.Err() != nil {
+			return msg, err
+		}
+		log.Info("Empty completion (no content, no tool calls); retrying", "model", params.Model, "attempt", attempt)
+		time.Sleep(500 * time.Millisecond)
+		msg, err = send()
+		if err != nil || !isEmptyCompletion(msg) {
+			return msg, err
+		}
+	}
+	log.Info("Completion still empty after retries", "model", params.Model)
+	utils.SendStreamChunk(sc, utils.StreamChunk{Type: utils.CONTENT, Payload: EmptyCompletionNotice})
+	msg.Content = EmptyCompletionNotice
+	return msg, nil
+}
+
 // SendChatCompletionStreamRequest wraps the single-attempt stream with
-// automatic retries for gateway providers.
+// automatic retries for gateway providers: mid-stream overload errors and
+// empty turns.
 func (c *ClientImpl) SendChatCompletionStreamRequest(params RequestParams, sc utils.StreamClient) (*ChatCompletionMessage, error) {
+	msg, err := c.sendWithErrorRetry(params, sc)
+	if !streamRetryEnabledFor(params) {
+		return msg, err
+	}
+	return retryEmpty(params, sc, msg, err, func() (*ChatCompletionMessage, error) {
+		return c.sendWithErrorRetry(params, sc)
+	})
+}
+
+func (c *ClientImpl) sendWithErrorRetry(params RequestParams, sc utils.StreamClient) (*ChatCompletionMessage, error) {
 	msg, err := c.sendChatCompletionStreamOnce(params, sc)
 	if err == nil || !isRetriableStreamError(err) || !streamRetryEnabledFor(params) {
 		return msg, err
