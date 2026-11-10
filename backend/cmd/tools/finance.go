@@ -36,7 +36,7 @@ var financeHTTPClient = &http.Client{}
 
 func isFinanceTool(name string) bool {
 	switch name {
-	case "finance_stock", "finance_technical", "finance_valuation", "finance_market", "finance_market_news", "finance_decision", "finance_quote", "finance_global_market", "finance_peer_compare", "finance_peer_group_save", "finance_peer_quant", "finance_warmup_status", "finance_account", "finance_judgement":
+	case "finance_stock", "finance_technical", "finance_valuation", "finance_market", "finance_market_news", "finance_decision", "finance_quote", "finance_global_market", "finance_peer_compare", "finance_peer_group_save", "finance_peer_quant", "finance_warmup_status", "finance_account", "finance_judgement", "finance_macro":
 		return true
 	}
 	return false
@@ -311,6 +311,8 @@ func financeTool(ctx context.Context, name, args string) providers.ToolOutput {
 			return financeError("invalid stock symbol: %q", p.Symbol)
 		}
 		path, timeout = "/api/v1/peer-warmup-status/"+url.PathEscape(sym), 30*time.Second
+	case "finance_macro":
+		path, timeout = "/api/v1/macro", 30*time.Second
 	case "finance_market":
 		switch p.Market {
 		case "", "overview":

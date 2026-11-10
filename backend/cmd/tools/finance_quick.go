@@ -29,6 +29,13 @@ func financeQuickTools() []*Tool {
 		},
 		{
 			ID:          uuid.New().String(),
+			Name:        "finance_macro",
+			Description: "获取美国市场环境（每天美股收盘后更新）：宏观（美债收益率、实际利率、收益率曲线、信用利差、金融状况、美联储资产负债表与净流动性、通胀 CPI/PCE、GDP、就业、工资、M2）、市场宽度（站上 50/200 日均线的股票占比、52 周新高新低、McClellan）、市场情绪（VIX 期限结构、VVIX、SKEW、CBOE 认沽认购比）、资金流向（上涨股与下跌股成交额、当天/近 5 日/近 20 日净流向、11 个板块 ETF 的资金流向）。用户问市场环境、宏观、利率、通胀、经济数据、市场宽度、市场情绪、恐慌程度、资金流向、资金流入流出、板块轮动时使用。返回 summary（三行中文摘要，优先原样引用）、series（各指标最新值、日期、1 个月/3 个月/1 年变化、10 年分位）、derived（通胀同比、GDP 年化、净流动性、萨姆规则等）、breadth、sentiment、flows（含 sectors）、risk_flags/breadth_flags/flow_flags。所有数字原样引用并带数据日期，不自行重算；资金流向是按成交额推算的近似（成交主要发生在上涨股还是下跌股），不是真实的买卖方资金数据，引用时要这样说明。只作市场背景，不得据此给出买卖、仓位或择时建议。",
+			InputSchema: `{"type":"object","properties":{},"additionalProperties":false}`,
+			IsEnabled:   true,
+		},
+		{
+			ID:          uuid.New().String(),
 			Name:        "finance_global_market",
 			Description: "获取全球金融市场收盘快照（轻量、快速）：美股主要指数与 VIX、A股/港股、亚太、欧洲指数、汇率、大宗商品（黄金/原油/铜）、美债收益率，以及各地区强弱汇总与风险情绪。只在用户问整体市场时使用，如“今日/最近金融市场怎么样”“全球市场今天如何”“美股昨晚怎么样”；用户只问某只股票的行情（如“NOW 今天行情怎么样”）时不要调用。各市场收盘日不同，引用涨跌必须带日期；美债变动是百分点；本工具不含新闻，不得据此推测涨跌原因或给出买卖建议。",
 			InputSchema: `{"type":"object","properties":{},"additionalProperties":false}`,
