@@ -17,7 +17,7 @@ import (
 // 美股（平台本地库）、A 股（600519.SH）、港股（0700.HK）都可以：平台按代码分到对应数据源。
 
 var klineSymbolRe = regexp.MustCompile(`^([A-Z][A-Z0-9.\-]{0,9}|\d{6}\.(SH|SZ|SS|BJ)|\d{1,5}\.HK)$`)
-var klinePeriods = map[string]bool{"3mo": true, "6mo": true, "1y": true, "2y": true, "5y": true}
+var klinePeriods = map[string]bool{"3mo": true, "6mo": true, "1y": true, "2y": true, "5y": true, "max": true}
 
 type klineBar struct {
 	T string   `json:"t"`
@@ -51,7 +51,7 @@ func financeKline(w http.ResponseWriter, r *http.Request) {
 		period = "1y"
 	}
 	if !klinePeriods[period] {
-		klineJSON(w, http.StatusBadRequest, klineResp{Status: "error", Symbol: symbol, Period: period, Error: "period 只能是 3mo、6mo、1y、2y、5y"})
+		klineJSON(w, http.StatusBadRequest, klineResp{Status: "error", Symbol: symbol, Period: period, Error: "period 只能是 3mo、6mo、1y、2y、5y、max"})
 		return
 	}
 	if !klineSymbolRe.MatchString(symbol) {
@@ -120,4 +120,46 @@ func parseKlineHistory(body []byte) (klineResp, error) {
 		out.Data = append(out.Data, klineBar{T: d.Date[:10], O: d.Open, H: d.High, L: d.Low, C: d.Close, V: d.Volume})
 	}
 	return out, nil
+}
+
+// 股票搜索（K 线页的搜索框）：GET /api/tools/finance/search?q=茅台 → 平台 /api/v1/symbols/search
+func financeSymbolSearch(w http.ResponseWriter, r *http.Request) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	w.Header().Set("Content-Type", "application/json")
+	if q == "" || len([]rune(q)) > 20 || strings.ContainsAny(q, "\r\n\t") {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"status":"error","error":"q：1–20 个字"}`))
+		return
+	}
+	base := strings.TrimRight(strings.TrimSpace(os.Getenv("FINANCE_BASE_URL")), "/")
+	key := strings.TrimSpace(os.Getenv("FINANCE_API_KEY"))
+	if base == "" || key == "" {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`{"status":"error","error":"服务器没有配置金融平台"}`))
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/v1/symbols/search?limit=20&q="+url.QueryEscape(q), nil)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-API-Key", key)
+	resp, err := financeHTTPClient.Do(req)
+	if err != nil {
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(`{"status":"error","error":"金融平台连不上"}`))
+		return
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 256<<10))
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(`{"status":"error","error":"金融平台搜索失败"}`))
+		return
+	}
+	w.Header().Set("Cache-Control", "private, max-age=60")
+	_, _ = w.Write(body)
 }

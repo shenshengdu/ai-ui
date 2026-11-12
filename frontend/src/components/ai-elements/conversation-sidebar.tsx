@@ -1,5 +1,6 @@
 "use client";
 
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -32,6 +33,7 @@ import {
   PinIcon,
   PinOffIcon,
   SearchIcon,
+  CandlestickChartIcon,
   SettingsIcon,
   SquarePenIcon,
   SunMoonIcon,
@@ -151,6 +153,7 @@ export const ConversationSidebar = ({
   const [editingTitle, setEditingTitle] = useState<string>("");
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const canChat = isAuthenticated && !isCheckingAuth;
+  const navigateTo = useNavigate();
 
   const flatItems = useMemo(() => {
     const items: FlatItem[] = [];
@@ -266,6 +269,13 @@ export const ConversationSidebar = ({
           >
             <SearchIcon className="size-[18px]" />
           </RailButton>
+          <RailButton
+            label={t("sidebar.kline")}
+            onClick={() => navigateTo("/kline")}
+            aria-label={t("sidebar.kline")}
+          >
+            <CandlestickChartIcon className="size-[18px]" />
+          </RailButton>
           <div className="flex-1" />
           <AccountMenu
             compact
@@ -329,6 +339,11 @@ export const ConversationSidebar = ({
               shortcut={[modKeyLabel, "K"]}
               onClick={onOpenSearch}
               disabled={!canChat}
+            />
+            <NavRow
+              icon={<CandlestickChartIcon />}
+              label={t("sidebar.kline")}
+              onClick={() => navigateTo("/kline")}
             />
           </nav>
 

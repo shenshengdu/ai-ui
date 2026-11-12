@@ -7,21 +7,30 @@
  */
 
 import { cn } from "@/lib/utils";
-import { TriangleAlertIcon } from "lucide-react";
+import { ExternalLinkIcon, TriangleAlertIcon } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState, type HTMLAttributes } from "react";
 import type { Chart, KLineData } from "klinecharts";
 import { useI18n } from "@/lib/i18n";
 import { getHeaders } from "@/lib/api/headers";
 
-type KlineChartProps = HTMLAttributes<HTMLDivElement> & { code: unknown };
+type KlineChartProps = HTMLAttributes<HTMLDivElement> & {
+  code?: unknown;
+  /** K 线页：直接给规格（不解析代码块） */
+  spec?: KlineSpec;
+  /** 主图高度（像素），默认 320；每个副图再加 80 */
+  height?: number;
+  /** K 线页：不显示「在 K 线页打开」按钮 */
+  pageMode?: boolean;
+};
 
 export type Interval = "day" | "week" | "month";
-export const RANGES = ["3mo", "6mo", "1y", "2y", "5y"] as const;
+export const RANGES = ["3mo", "6mo", "1y", "2y", "5y", "max"] as const;
 export type Range = (typeof RANGES)[number];
 export const MAIN_INDICATORS = ["MA", "EMA", "BOLL"] as const;
 export const SUB_INDICATORS = ["VOL", "MACD", "KDJ", "RSI"] as const;
 const ALL_INDICATORS: readonly string[] = [...MAIN_INDICATORS, ...SUB_INDICATORS];
-const RANGE_LABEL: Record<Range, string> = { "3mo": "3M", "6mo": "6M", "1y": "1Y", "2y": "2Y", "5y": "5Y" };
+const RANGE_LABEL: Record<Range, string> = { "3mo": "3M", "6mo": "6M", "1y": "1Y", "2y": "2Y", "5y": "5Y", max: "MAX" };
 
 // 涨红跌绿（A 股、港股习惯）
 const UP = "#F92855";
@@ -135,9 +144,12 @@ function Toggle({ active, onClick, children }: { active: boolean; onClick: () =>
   );
 }
 
-export function KlineChart({ code, className, ...props }: KlineChartProps) {
+export function KlineChart({ code, spec: specProp, height = 320, pageMode = false, className, ...props }: KlineChartProps) {
   const { t } = useI18n();
-  const spec = useMemo(() => parseSpec(code), [code]);
+  const navigate = useNavigate();
+  const specPropKey = specProp ? JSON.stringify(specProp) : "";
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const spec = useMemo(() => specProp ?? parseSpec(code), [specPropKey, code]);
   const [range, setRange] = useState<Range>(spec?.period ?? "1y");
   const [interval, setIntervalKind] = useState<Interval>(spec?.interval ?? "day");
   const [indicators, setIndicators] = useState<string[]>(spec?.indicators ?? ["MA", "VOL"]);
@@ -231,7 +243,15 @@ export function KlineChart({ code, className, ...props }: KlineChartProps) {
     const chart = chartRef.current;
     if (!chart || !bars) return;
     chart.resize();
-    chart.applyNewData(aggregate(bars, interval));
+    const data = aggregate(bars, interval);
+    chart.applyNewData(data);
+    // 整段范围一屏放下（默认每根 K 线固定宽度，1 年、全部历史都只看得到最近几个月）；拖动平移、滚轮缩放
+    const w = boxRef.current?.clientWidth ?? 0;
+    if (w > 0 && data.length > 0) {
+      chart.setOffsetRightDistance(8);
+      chart.setBarSpace(Math.max(1, Math.min(12, (w - 70) / data.length)));
+      chart.scrollToRealTime();
+    }
   }, [bars, interval, version]);
 
   // 指标
@@ -299,13 +319,26 @@ export function KlineChart({ code, className, ...props }: KlineChartProps) {
           ))}
         </div>
         {loading && <span className="text-xs text-muted-foreground">{t("kline.loading")}</span>}
+        {!pageMode && (
+          <button
+            type="button"
+            title={t("kline.openPage")}
+            aria-label={t("kline.openPage")}
+            onClick={() =>
+              navigate(`/kline?symbol=${encodeURIComponent(spec.symbol)}&period=${range}&interval=${interval}&indicators=${indicators.join(",")}`)
+            }
+            className="ml-auto rounded p-1 text-muted-foreground hover:bg-muted"
+          >
+            <ExternalLinkIcon className="size-3.5" />
+          </button>
+        )}
       </div>
       {error && (
         <div className="flex items-center gap-2 px-3 py-2 text-sm text-destructive">
           <TriangleAlertIcon className="size-4" /> {t("kline.error")}：{error}
         </div>
       )}
-      <div ref={boxRef} style={{ height: 320 + subCount * 80 }} className="w-full" />
+      <div ref={boxRef} style={{ height: height + subCount * 80 }} className="w-full" />
       {source && <div className="px-2 pb-1 text-right text-[11px] text-muted-foreground">{t("kline.source")}：{source}</div>}
     </div>
   );

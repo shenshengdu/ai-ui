@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.tsx";
+import { KlinePage } from "./components/kline/KlinePage.tsx";
 import "./globals.css";
 import { ThemeProvider } from "./components/theme-provider.tsx";
 import { AuthProvider } from "./hooks/useAuth.tsx";
@@ -83,6 +84,7 @@ const AppTree = (
               <Routes>
                 <Route path="/" element={<App />} />
                 <Route path="/c/:convId" element={<App />} />
+                <Route path="/kline" element={<KlinePage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </SettingsDataProvider>
