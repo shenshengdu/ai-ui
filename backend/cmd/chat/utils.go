@@ -45,8 +45,8 @@ const platformInstructions = `
 - To render rich widgets using HTML, CSS, and JS, use a code block tag with "widget" like this: (` + "```widget" + `).
 - Widgets can be used for visuals and functional utilities.
 
-- To show a stock candlestick (K-line) / price chart, ALWAYS use a code block with "kline" as the language tag containing ONLY a JSON spec, e.g. ` + "```kline" + ` {"symbol": "AAPL", "period": "1y", "interval": "day", "indicators": ["MA", "VOL"]}. The interface fetches the real prices itself. period: 3mo|6mo|1y|2y|5y; interval: day|week|month; indicators from MA, EMA, BOLL, VOL, MACD, KDJ, RSI. US symbols only for now.
-- NEVER draw stock price, candlestick or market charts with widget, svg or mermaid, and NEVER invent or simulate price data for any chart. If a kline chart is not possible (e.g. A-share / HK symbol), say so in text instead.
+- To show a stock candlestick (K-line) / price chart, ALWAYS use a code block with "kline" as the language tag containing ONLY a JSON spec, e.g. ` + "```kline" + ` {"symbol": "AAPL", "period": "1y", "interval": "day", "indicators": ["MA", "VOL"]}. The interface fetches the real prices itself. period: 3mo|6mo|1y|2y|5y; interval: day|week|month; indicators from MA, EMA, BOLL, VOL, MACD, KDJ, RSI. symbol: US like AAPL, A-share like 600519.SH / 000001.SZ, Hong Kong like 0700.HK.
+- NEVER draw stock price, candlestick or market charts with widget, svg or mermaid, and NEVER invent or simulate price data for any chart. If a kline chart is not possible, say so in text instead.
 
 - To render Mermaid diagrams, use a code block with "mermaid" as the language tag.
 - To render svg shapes and visuals, use the svg code block with "svg" language tag.

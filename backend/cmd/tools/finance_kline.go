@@ -14,9 +14,9 @@ import (
 
 // 日 K 线数据：前端 ```kline``` 代码块用。浏览器只调这里（需要登录），平台的 API key 只在服务器上。
 // GET /api/tools/finance/kline?symbol=AAPL&period=1y
-// 目前只支持美股（平台本地有美股历史）；A 股、港股代码先返回提示。
+// 美股（平台本地库）、A 股（600519.SH）、港股（0700.HK）都可以：平台按代码分到对应数据源。
 
-var klineUSRe = regexp.MustCompile(`^[A-Z][A-Z0-9.\-]{0,9}$`)
+var klineSymbolRe = regexp.MustCompile(`^([A-Z][A-Z0-9.\-]{0,9}|\d{6}\.(SH|SZ|SS|BJ)|\d{1,5}\.HK)$`)
 var klinePeriods = map[string]bool{"3mo": true, "6mo": true, "1y": true, "2y": true, "5y": true}
 
 type klineBar struct {
@@ -54,9 +54,9 @@ func financeKline(w http.ResponseWriter, r *http.Request) {
 		klineJSON(w, http.StatusBadRequest, klineResp{Status: "error", Symbol: symbol, Period: period, Error: "period 只能是 3mo、6mo、1y、2y、5y"})
 		return
 	}
-	if !klineUSRe.MatchString(symbol) {
+	if !klineSymbolRe.MatchString(symbol) {
 		klineJSON(w, http.StatusBadRequest, klineResp{Status: "error", Symbol: symbol, Period: period,
-			Error: "K 线图目前只支持美股代码（如 AAPL）；A 股、港股以后接入"})
+			Error: "股票代码格式：美股 AAPL、A 股 600519.SH、港股 0700.HK"})
 		return
 	}
 	base := strings.TrimRight(strings.TrimSpace(os.Getenv("FINANCE_BASE_URL")), "/")

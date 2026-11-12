@@ -59,8 +59,8 @@ func financeBaseTools() []*Tool {
 		{
 			ID:          uuid.New().String(),
 			Name:        "finance_technical",
-			Description: "获取指定股票的 Quant Technical 技术面量化分析。必须以 Finance Platform 返回的 Quant Technical 模型结果为准，不要自行重新计算或修改模型评分。回答时应先给出综合技术面结论，再结合模型中的趋势、动量、价格行为、RSI、MACD、Stochastic、ADX/DI、量价关系、相对强弱、风险和技术背离解释原因。趋势判断应结合短期、中期、长期趋势以及价格结构；ADX 不能单独视为看多或看空，应结合 +DI/-DI 判断方向和趋势强度；RSI 超买超卖应结合趋势环境解释，不能把超买直接等同于看跌或超卖直接等同于看涨；技术背离、量价关系和风险信号应作为确认或警示因素，而不是脱离整体趋势单独下结论。综合评分反映模型对当前技术状态的量化判断，应同时说明主要支撑因素和主要风险因素。",
-			InputSchema: symbolSchema,
+			Description: "获取指定股票（美股、A 股、港股）的 Quant Technical 技术面量化分析。必须以 Finance Platform 返回的 Quant Technical 模型结果为准，不要自行重新计算或修改模型评分。回答时应先给出综合技术面结论，再结合模型中的趋势、动量、价格行为、RSI、MACD、Stochastic、ADX/DI、量价关系、相对强弱、风险和技术背离解释原因。趋势判断应结合短期、中期、长期趋势以及价格结构；ADX 不能单独视为看多或看空，应结合 +DI/-DI 判断方向和趋势强度；RSI 超买超卖应结合趋势环境解释，不能把超买直接等同于看跌或超卖直接等同于看涨；技术背离、量价关系和风险信号应作为确认或警示因素，而不是脱离整体趋势单独下结论。综合评分反映模型对当前技术状态的量化判断，应同时说明主要支撑因素和主要风险因素。",
+			InputSchema: `{"type":"object","properties":{"symbol":{"type":"string","description":"股票代码。美股如 AAPL、NVDA；A 股用 6 位代码加交易所，如 600519.SH、300750.SZ；港股如 0700.HK。"}},"required":["symbol"],"additionalProperties":false}`,
 			IsEnabled:   true,
 		},
 		{
