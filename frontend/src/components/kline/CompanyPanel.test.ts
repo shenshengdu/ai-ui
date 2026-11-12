@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fmtMoney, fmtPct, hasCompanyData, safeUrl } from "./CompanyPanel";
+import { fmtMoney, fmtPct, hasCompanyData, periodLabel, safeUrl } from "./CompanyPanel";
 
 describe("CompanyPanel helpers", () => {
   it("只有个股有公告和财报", () => {
@@ -20,5 +20,11 @@ describe("CompanyPanel helpers", () => {
     expect(fmtPct(12.345)).toBe("+12.35%");
     expect(fmtPct(-3)).toBe("-3.00%");
     expect(fmtPct(undefined)).toBe("—");
+  });
+  it("报告期类型", () => {
+    expect(periodLabel("三季报", true)).toBe("三季报");
+    expect(periodLabel("三季报", false)).toBe("Q3 (9M)");
+    expect(periodLabel("Q2 季报", false)).toBe("Q2 (fiscal)");
+    expect(periodLabel(null, true)).toBe("—");
   });
 });
