@@ -91,6 +91,15 @@ func formatFinanceQuote(body []byte) string {
 		ChangePercent *float64 `json:"change_percent"`
 		Timestamp     int64    `json:"timestamp"`
 		Source        string   `json:"source"`
+		// A 股、港股：平台已按北京时间算好
+		Name         string `json:"name"`
+		Market       string `json:"market"`
+		Currency     string `json:"currency"`
+		TradeDate    string `json:"trade_date"`
+		MarketStatus string `json:"market_status"`
+		PriceLabel   string `json:"price_label"`
+		DataTime     string `json:"data_time"`
+		NowLocal     string `json:"now_local"`
 	}
 	if err := json.Unmarshal(body, &q); err != nil || q.Status != "success" || q.Price == nil || *q.Price == 0 {
 		return "Finance Platform quote unavailable: " + truncateRunes(string(body), 300)
@@ -103,6 +112,28 @@ func formatFinanceQuote(body []byte) string {
 		p := c / *q.PrevClose * 100
 		change, pct = &c, &p
 		note = " (computed from price - previous close)"
+	}
+
+	if q.MarketStatus != "" {
+		market := map[string]string{"A": "China A-share", "HK": "Hong Kong"}[q.Market]
+		if market == "" {
+			market = q.Market
+		}
+		label := q.PriceLabel
+		if label == "" {
+			label = "Latest price"
+		}
+		var b strings.Builder
+		fmt.Fprintf(&b, "%s %s quote (%s, %s)\n", q.Symbol, q.Name, market, q.Currency)
+		fmt.Fprintf(&b, "Trading date (Beijing time): %s\n", q.TradeDate)
+		fmt.Fprintf(&b, "Market status: %s\n", q.MarketStatus)
+		fmt.Fprintf(&b, "%s: %s\n", label, fqNum(q.Price, 2))
+		fmt.Fprintf(&b, "Previous close: %s\n", fqNum(q.PrevClose, 2))
+		fmt.Fprintf(&b, "Change vs previous close: %s %s (%s%%)%s\n", fqArrow(change), fqSigned(change, 2), fqSigned(pct, 2), note)
+		fmt.Fprintf(&b, "Open: %s | High: %s | Low: %s\n", fqNum(q.Open, 2), fqNum(q.High, 2), fqNum(q.Low, 2))
+		fmt.Fprintf(&b, "Data time: %s | Now: %s | Source: %s\n", q.DataTime, q.NowLocal, q.Source)
+		b.WriteString("Use these numbers and the market status as-is; do not recompute them.")
+		return b.String()
 	}
 
 	ny := nyLocation()
