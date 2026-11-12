@@ -36,11 +36,24 @@ func TestFinanceKlineParseAndProxy(t *testing.T) {
 		t.Fatalf("api key must not leak: %s", rec.Body.String())
 	}
 
-	for _, q := range []string{"symbol=600519.SH", "symbol=AAPL&period=10y", "symbol=../x"} {
+	for _, q := range []string{"symbol=600519", "symbol=AAPL&period=10y", "symbol=../x", "symbol=0700.HK%2F.."} {
 		rec := httptest.NewRecorder()
 		financeKline(rec, httptest.NewRequest(http.MethodGet, "/finance/kline?"+q, nil))
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("%s: want 400, got %d", q, rec.Code)
+		}
+	}
+}
+
+func TestFinanceKlineSymbols(t *testing.T) {
+	for _, s := range []string{"AAPL", "BRK.B", "600519.SH", "000001.SZ", "0700.HK", "09988.HK"} {
+		if !klineSymbolRe.MatchString(s) {
+			t.Fatalf("%s should be accepted", s)
+		}
+	}
+	for _, s := range []string{"600519", "0700", "../etc", "600519.SH;x", ""} {
+		if klineSymbolRe.MatchString(s) {
+			t.Fatalf("%s should be rejected", s)
 		}
 	}
 }
