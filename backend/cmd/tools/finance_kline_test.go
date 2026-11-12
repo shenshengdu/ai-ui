@@ -57,3 +57,33 @@ func TestFinanceKlineSymbols(t *testing.T) {
 		}
 	}
 }
+
+func TestFinanceSymbolSearchProxy(t *testing.T) {
+	platform := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-API-Key") != "k" || r.URL.Path != "/api/v1/symbols/search" || r.URL.Query().Get("q") != "茅台" {
+			http.Error(w, "bad", http.StatusBadRequest)
+			return
+		}
+		_, _ = w.Write([]byte(`{"status":"success","results":[{"symbol":"600519.SH","name":"贵州茅台","market":"A"}]}`))
+	}))
+	defer platform.Close()
+	t.Setenv("FINANCE_BASE_URL", platform.URL)
+	t.Setenv("FINANCE_API_KEY", "k")
+	rec := httptest.NewRecorder()
+	financeSymbolSearch(rec, httptest.NewRequest(http.MethodGet, "/finance/search?q=%E8%8C%85%E5%8F%B0", nil))
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "600519.SH") {
+		t.Fatalf("code %d body %s", rec.Code, rec.Body.String())
+	}
+	for _, q := range []string{"", "x%0Ay", "a%09b", "aaaaaaaaaaaaaaaaaaaaaaaaa"} {
+		rec := httptest.NewRecorder()
+		financeSymbolSearch(rec, httptest.NewRequest(http.MethodGet, "/finance/search?q="+q, nil))
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("%q: want 400, got %d", q, rec.Code)
+		}
+	}
+	rec = httptest.NewRecorder()
+	financeKline(rec, httptest.NewRequest(http.MethodGet, "/finance/kline?symbol=AAPL&period=max", nil))
+	if rec.Code == http.StatusBadRequest {
+		t.Fatalf("period=max should be accepted: %s", rec.Body.String())
+	}
+}
