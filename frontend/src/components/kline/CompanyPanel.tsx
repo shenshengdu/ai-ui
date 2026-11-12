@@ -14,6 +14,8 @@ import { MARKET_NAME } from "./markets";
 export type Announcement = { time?: string | null; title: string; category?: string | null; url?: string | null; source?: string };
 export type FinRow = {
   report_date: string;
+  period_type?: string | null;
+  months?: number | null;
   ann_date?: string | null;
   currency?: string | null;
   revenue?: number | null;
@@ -59,6 +61,17 @@ export function fmtMoney(v: number | null | undefined, zh: boolean): string {
   if (a >= 1e9) return `${(v / 1e9).toFixed(2)}B`;
   if (a >= 1e6) return `${(v / 1e6).toFixed(2)}M`;
   return v.toFixed(0);
+}
+
+const PERIOD_EN: Record<string, string> = { 一季报: "Q1", 中报: "H1", 三季报: "Q3 (9M)", 年报: "Annual", 季报: "Quarterly" };
+
+/** 报告期类型：后端给中文（一季报/中报/三季报/年报，美股「Q1 季报」等）；英文界面翻一下 */
+export function periodLabel(p: string | null | undefined, zh: boolean): string {
+  if (!p) return "—";
+  if (zh) return p;
+  const m = /^(Q[1-3]) 季报$/.exec(p);
+  if (m) return `${m[1]} (fiscal)`;
+  return PERIOD_EN[p] ?? p;
 }
 
 export function fmtPct(v: number | null | undefined): string {
@@ -150,6 +163,7 @@ function FinTable({ symbol }: { symbol: string }) {
         <thead className="text-xs text-muted-foreground">
           <tr className="border-b">
             <th className="py-1.5 text-left font-normal">{t("kline.fin.period")}</th>
+            <th className="py-1.5 text-left font-normal">{t("kline.fin.type")}</th>
             <th className="py-1.5 text-left font-normal">{t("kline.fin.annDate")}</th>
             <th className="py-1.5 font-normal">{t("kline.fin.revenue")}</th>
             <th className="py-1.5 font-normal">{t("kline.fin.yoy")}</th>
@@ -165,6 +179,9 @@ function FinTable({ symbol }: { symbol: string }) {
           {rows.map((r) => (
             <tr key={r.report_date} className="border-b last:border-0">
               <td className="py-1.5 text-left font-mono text-xs">{r.report_date}</td>
+              <td className="py-1.5 text-left text-xs" title={r.months ? t("kline.fin.months", { n: r.months }) : undefined}>
+                {periodLabel(r.period_type, zh)}
+              </td>
               <td className="py-1.5 text-left font-mono text-xs text-muted-foreground">{r.ann_date ?? "—"}</td>
               <td className="py-1.5">{fmtMoney(r.revenue, zh)}</td>
               <td className={cn("py-1.5", yoyCls(r.revenue_yoy))}>{fmtPct(r.revenue_yoy)}</td>
@@ -178,7 +195,10 @@ function FinTable({ symbol }: { symbol: string }) {
           ))}
         </tbody>
       </table>
-      {cur && <p className="pt-2 text-xs text-muted-foreground">{cur}</p>}
+      <p className="pt-2 text-xs text-muted-foreground">
+        {cur ? `${cur} · ` : ""}
+        {t("kline.fin.cumulative")}
+      </p>
     </div>
   );
 }
