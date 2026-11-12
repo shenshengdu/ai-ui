@@ -1,6 +1,7 @@
 /**
  * K 线页 /kline?symbol=600519.SH&period=max&interval=day&indicators=MA,VOL
  * 顶部搜索框（代码或名称：美股、A 股、港股），下面整页 K 线图，默认全部历史日 K。
+ * 图下面是公司公告（原文链接）和主要财务（CompanyPanel）。
  * 搜索走后端 /api/tools/finance/search，日 K 走 /api/tools/finance/kline（平台 key 只在服务器）。
  */
 
@@ -8,6 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeftIcon, CandlestickChartIcon, GlobeIcon, SearchIcon } from "lucide-react";
 import { MARKET_GROUPS, MARKET_NAME } from "./markets";
+import { CompanyPanel, hasCompanyData } from "./CompanyPanel";
 import { KlineChart, RANGES, type Interval, type KlineSpec, type Range } from "@/components/ai-elements/kline-chart";
 import { getHeaders } from "@/lib/api/headers";
 import { useI18n } from "@/lib/i18n";
@@ -206,6 +208,7 @@ export function KlinePage() {
           <>
             {current?.name && <div className="px-1 pb-1 text-sm text-muted-foreground">{current.name}</div>}
             <KlineChart key={spec.symbol} spec={spec} height={height} pageMode className="my-0" />
+            {hasCompanyData(spec.symbol) && <CompanyPanel key={`co-${spec.symbol}`} symbol={spec.symbol} />}
           </>
         ) : (
           <div className="mx-auto mt-16 max-w-md text-center text-sm text-muted-foreground">
