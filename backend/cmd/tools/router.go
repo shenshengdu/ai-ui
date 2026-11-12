@@ -16,6 +16,7 @@ func Handler() http.Handler {
 	mux.HandleFunc("POST /sandbox-result", submitSandboxResult)
 	mux.HandleFunc("GET /finance/kline", financeKline)
 	mux.HandleFunc("GET /finance/search", financeSymbolSearch)
+	mux.HandleFunc("GET /finance/company", financeCompany)
 	// mux.HandleFunc("GET /{id}", GetTool)
 	// mux.HandleFunc("POST /save", SaveTool)
 	// mux.HandleFunc("DELETE /delete/{id}", DeleteTool)
