@@ -46,12 +46,12 @@ func TestFinanceKlineParseAndProxy(t *testing.T) {
 }
 
 func TestFinanceKlineSymbols(t *testing.T) {
-	for _, s := range []string{"AAPL", "BRK.B", "600519.SH", "000001.SZ", "0700.HK", "09988.HK"} {
+	for _, s := range []string{"AAPL", "BRK.B", "600519.SH", "000001.SZ", "0700.HK", "09988.HK", "^N225", "^GSPC", "GC=F", "CNH=X", "EURUSD=X", "HSI.HK"} {
 		if !klineSymbolRe.MatchString(s) {
 			t.Fatalf("%s should be accepted", s)
 		}
 	}
-	for _, s := range []string{"600519", "0700", "../etc", "600519.SH;x", ""} {
+	for _, s := range []string{"600519", "0700", "../etc", "600519.SH;x", "", "^", "GC=Z", "^N2/25"} {
 		if klineSymbolRe.MatchString(s) {
 			t.Fatalf("%s should be rejected", s)
 		}

@@ -6,7 +6,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeftIcon, CandlestickChartIcon, SearchIcon } from "lucide-react";
+import { ArrowLeftIcon, CandlestickChartIcon, GlobeIcon, SearchIcon } from "lucide-react";
+import { MARKET_GROUPS, MARKET_NAME } from "./markets";
 import { KlineChart, RANGES, type Interval, type KlineSpec, type Range } from "@/components/ai-elements/kline-chart";
 import { getHeaders } from "@/lib/api/headers";
 import { useI18n } from "@/lib/i18n";
@@ -41,7 +42,7 @@ export function KlinePage() {
   const height = useChartHeight();
 
   const spec: KlineSpec | null = useMemo(() => {
-    if (!/^[A-Z0-9.\-]{1,15}$/.test(symbol)) return null;
+    if (!/^[\^A-Z0-9.\-=]{1,15}$/.test(symbol)) return null;
     const period = (RANGES as readonly string[]).includes(params.get("period") || "") ? (params.get("period") as Range) : "max";
     const iv = params.get("interval");
     const interval: Interval = iv === "week" || iv === "month" ? iv : "day";
@@ -100,7 +101,12 @@ export function KlinePage() {
     setOpen(false);
   };
 
-  const current = picked?.symbol === symbol ? picked : hits.find((h) => h.symbol === symbol);
+  const current =
+    picked?.symbol === symbol
+      ? picked
+      : hits.find((h) => h.symbol === symbol) ?? (MARKET_NAME[symbol] ? { symbol, name: MARKET_NAME[symbol] } : undefined);
+  const [showMarkets, setShowMarkets] = useState(false);
+  const marketsOpen = showMarkets || !spec;
 
   return (
     <div className="flex h-dvh flex-col bg-background text-foreground">
@@ -131,7 +137,7 @@ export function KlinePage() {
                 else if (e.key === "ArrowUp") setActive((a) => Math.max(a - 1, 0));
                 else if (e.key === "Enter") {
                   if (hits[active]) pick(hits[active]);
-                  else if (/^[A-Za-z0-9.\-]{1,15}$/.test(q.trim())) pick({ symbol: q.trim().toUpperCase() });
+                  else if (/^[\^A-Za-z0-9.\-=]{1,15}$/.test(q.trim())) pick({ symbol: q.trim().toUpperCase() });
                 } else if (e.key === "Escape") setOpen(false);
               }}
               placeholder={t("kline.searchPlaceholder")}
@@ -162,7 +168,39 @@ export function KlinePage() {
             </ul>
           )}
         </div>
+        <button
+          type="button"
+          onClick={() => setShowMarkets((v) => !v)}
+          className={cn("flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-muted", showMarkets && "bg-muted")}
+          title={t("kline.markets")}
+        >
+          <GlobeIcon className="size-4" />
+          <span className="hidden sm:inline">{t("kline.markets")}</span>
+        </button>
       </header>
+      {marketsOpen && (
+        <div className="shrink-0 space-y-1.5 border-b px-3 py-2 text-sm">
+          {MARKET_GROUPS.map((g) => (
+            <div key={g.key} className="flex flex-wrap items-center gap-1">
+              <span className="w-20 shrink-0 text-xs text-muted-foreground">{t(`kline.group.${g.key}` as "kline.group.a")}</span>
+              {g.items.map((it) => (
+                <button
+                  key={it.symbol}
+                  type="button"
+                  onClick={() => {
+                    pick({ symbol: it.symbol, name: it.name });
+                    setShowMarkets(false);
+                  }}
+                  className={cn("rounded border px-2 py-0.5 text-xs hover:bg-muted", it.symbol === symbol && "bg-primary text-primary-foreground")}
+                  title={it.symbol}
+                >
+                  {it.name}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
       <main className="min-h-0 flex-1 overflow-auto px-3 py-2">
         {spec ? (
           <>

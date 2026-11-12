@@ -53,7 +53,7 @@ export function parseSpec(code: unknown): KlineSpec | null {
     return null;
   }
   const symbol = String(raw?.symbol ?? "").trim().toUpperCase();
-  if (!/^[A-Z0-9.\-]{1,15}$/.test(symbol)) return null;
+  if (!/^[\^A-Z0-9.\-=]{1,15}$/.test(symbol)) return null;
   const period = (RANGES as readonly string[]).includes(String(raw.period)) ? (raw.period as Range) : "1y";
   const interval = ["day", "week", "month"].includes(String(raw.interval)) ? (raw.interval as Interval) : "day";
   const ind = Array.isArray(raw.indicators)
@@ -209,6 +209,9 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
   const [version, setVersion] = useState(0);
   const [params, setParams] = useState<Record<string, number[]>>(loadParams);
   const [showParams, setShowParams] = useState(false);
+  // 没有成交量的（汇率、部分指数）：不画成交量副图
+  const hasVolume = useMemo(() => !!bars && bars.some((b) => (b.v ?? 0) > 0), [bars]);
+  const shown = useMemo(() => (hasVolume || !bars ? indicators : indicators.filter((x) => x !== "VOL")), [indicators, hasVolume, bars]);
   const paramsKey = JSON.stringify(params);
   // 规格（流式输出时晚一步才完整）一出来就套用它的范围、周期、指标；之后用户点工具栏不受影响
   const specKey = spec ? `${spec.symbol}|${spec.period}|${spec.interval}|${spec.indicators.join(",")}` : "";
@@ -291,6 +294,9 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
     if (!chart || !bars) return;
     chart.resize();
     const data = aggregate(bars, interval);
+    // 小数位：汇率（EUR/USD 1.08）这类价格小的要 4 位
+    const last = data.length ? data[data.length - 1].close : 0;
+    chart.setPriceVolumePrecision(last > 0 && last < 10 ? 4 : 2, 0);
     chart.applyNewData(data);
     // 整段范围一屏放下（默认每根 K 线固定宽度，1 年、全部历史都只看得到最近几个月）；拖动平移、滚轮缩放
     const w = boxRef.current?.clientWidth ?? 0;
@@ -308,14 +314,14 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
     const spec = (name: string) => (params[name] ? { name, calcParams: params[name] } : name);
     for (const name of MAIN_INDICATORS) {
       chart.removeIndicator("candle_pane", name);
-      if (indicators.includes(name)) chart.createIndicator(spec(name), true, { id: "candle_pane" });
+      if (shown.includes(name)) chart.createIndicator(spec(name), true, { id: "candle_pane" });
     }
     for (const name of SUB_INDICATORS) {
       const pane = subPanes.current.get(name);
-      if (pane && !indicators.includes(name)) {
+      if (pane && !shown.includes(name)) {
         chart.removeIndicator(pane, name);
         subPanes.current.delete(name);
-      } else if (!pane && indicators.includes(name)) {
+      } else if (!pane && shown.includes(name)) {
         const id = chart.createIndicator(spec(name), false, { height: 80 });
         if (id) subPanes.current.set(name, id);
       } else if (pane) {
@@ -323,7 +329,7 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [indicators, version, paramsKey]);
+  }, [shown, version, paramsKey]);
 
   if (!spec) {
     return (
@@ -335,7 +341,7 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
 
   const toggle = (name: string) =>
     setIndicators((cur) => (cur.includes(name) ? cur.filter((x) => x !== name) : [...cur, name]));
-  const subCount = indicators.filter((x) => (SUB_INDICATORS as readonly string[]).includes(x)).length;
+  const subCount = shown.filter((x) => (SUB_INDICATORS as readonly string[]).includes(x)).length;
 
   return (
     <div className={cn("my-2 w-full rounded-md border", className)} {...props}>

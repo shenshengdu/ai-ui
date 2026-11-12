@@ -45,7 +45,7 @@ const platformInstructions = `
 - To render rich widgets using HTML, CSS, and JS, use a code block tag with "widget" like this: (` + "```widget" + `).
 - Widgets can be used for visuals and functional utilities.
 
-- To show a stock candlestick (K-line) / price chart, ALWAYS use a code block with "kline" as the language tag containing ONLY a JSON spec, e.g. ` + "```kline" + ` {"symbol": "AAPL", "period": "1y", "interval": "day", "indicators": ["MA", "VOL"]}. The interface fetches the real prices itself. period: 3mo|6mo|1y|2y|5y; interval: day|week|month; indicators from MA, EMA, BOLL, VOL, MACD, KDJ, RSI. symbol: US like AAPL, A-share like 600519.SH / 000001.SZ, Hong Kong like 0700.HK.
+- To show a stock candlestick (K-line) / price chart, ALWAYS use a code block with "kline" as the language tag containing ONLY a JSON spec, e.g. ` + "```kline" + ` {"symbol": "AAPL", "period": "1y", "interval": "day", "indicators": ["MA", "VOL"]}. The interface fetches the real prices itself. period: 3mo|6mo|1y|2y|5y; interval: day|week|month; indicators from MA, EMA, BOLL, VOL, MACD, KDJ, RSI. symbol: US like AAPL, A-share like 600519.SH / 000001.SZ, Hong Kong like 0700.HK; indices like 000300.SH (CSI 300), 000001.SH (SSE Composite), HSI.HK, HSTECH.HK, ^GSPC, ^NDX, ^DJI, ^N225; futures GC=F (gold), CL=F (WTI); FX CNH=X (USD/CNH), JPY=X; yields ^TNX.
 - NEVER draw stock price, candlestick or market charts with widget, svg or mermaid, and NEVER invent or simulate price data for any chart. If a kline chart is not possible, say so in text instead.
 
 - To render Mermaid diagrams, use a code block with "mermaid" as the language tag.
