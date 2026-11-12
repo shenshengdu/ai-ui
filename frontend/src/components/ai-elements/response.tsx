@@ -2,6 +2,7 @@
 
 import { CodeBlock, CodeBlockCopyButton } from "./code-block.tsx";
 import { MermaidDiagram } from "./mermaid-diagram.tsx";
+import { KlineChart } from "./kline-chart.tsx";
 import { SvgRenderer } from "./svg-renderer.tsx";
 import { WidgetRenderer } from "./widget-renderer.tsx";
 import { FileCard } from "./file-card.tsx";
@@ -479,6 +480,10 @@ const components: Options["components"] = {
 
     if (["mermaid", "mmd"].includes(language.toLowerCase())) {
       return <MermaidDiagram code={code} className={cn("w-full", className)} />;
+    }
+
+    if (language.toLowerCase() === "kline") {
+      return <KlineChart code={code} className={cn("w-full", className)} />;
     }
 
     if (language.toLowerCase() === "svg") {
