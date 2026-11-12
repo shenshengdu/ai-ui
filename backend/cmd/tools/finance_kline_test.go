@@ -74,7 +74,7 @@ func TestFinanceSymbolSearchProxy(t *testing.T) {
 	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "600519.SH") {
 		t.Fatalf("code %d body %s", rec.Code, rec.Body.String())
 	}
-	for _, q := range []string{"", "%0Ax", "aaaaaaaaaaaaaaaaaaaaaaaaa"} {
+	for _, q := range []string{"", "x%0Ay", "a%09b", "aaaaaaaaaaaaaaaaaaaaaaaaa"} {
 		rec := httptest.NewRecorder()
 		financeSymbolSearch(rec, httptest.NewRequest(http.MethodGet, "/finance/search?q="+q, nil))
 		if rec.Code != http.StatusBadRequest {
