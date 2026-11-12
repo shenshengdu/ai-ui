@@ -16,7 +16,8 @@ import (
 // GET /api/tools/finance/kline?symbol=AAPL&period=1y
 // 美股（平台本地库）、A 股（600519.SH）、港股（0700.HK）都可以：平台按代码分到对应数据源。
 
-var klineSymbolRe = regexp.MustCompile(`^([A-Z][A-Z0-9.\-]{0,9}|\d{6}\.(SH|SZ|SS|BJ)|\d{1,5}\.HK)$`)
+// 也接受雅虎风格的全球指数、期货、汇率：^N225、GC=F、CNH=X、^TNX
+var klineSymbolRe = regexp.MustCompile(`^([A-Z][A-Z0-9.\-]{0,9}|\d{6}\.(SH|SZ|SS|BJ)|\d{1,5}\.HK|\^[A-Z0-9.]{1,10}|[A-Z]{1,8}=[FX])$`)
 var klinePeriods = map[string]bool{"3mo": true, "6mo": true, "1y": true, "2y": true, "5y": true, "max": true}
 
 type klineBar struct {
@@ -56,7 +57,7 @@ func financeKline(w http.ResponseWriter, r *http.Request) {
 	}
 	if !klineSymbolRe.MatchString(symbol) {
 		klineJSON(w, http.StatusBadRequest, klineResp{Status: "error", Symbol: symbol, Period: period,
-			Error: "股票代码格式：美股 AAPL、A 股 600519.SH、港股 0700.HK"})
+			Error: "代码格式：美股 AAPL、A 股 600519.SH、港股 0700.HK、指数 ^N225、期货 GC=F、汇率 CNH=X"})
 		return
 	}
 	base := strings.TrimRight(strings.TrimSpace(os.Getenv("FINANCE_BASE_URL")), "/")
