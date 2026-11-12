@@ -187,11 +187,15 @@ export function KlineChart({ code, className, ...props }: KlineChartProps) {
       chart?.setPriceVolumePrecision(2, 0);
       setVersion((v) => v + 1);
     });
+    // 跟着图表区域本身的大小重画：流式输出时组件建好那一刻宽度可能还是 0，之后才变宽（只听窗口大小会一直是空白）
     const onResize = () => chartRef.current?.resize();
     window.addEventListener("resize", onResize);
+    const ro = typeof ResizeObserver !== "undefined" && boxRef.current ? new ResizeObserver(onResize) : null;
+    if (ro && boxRef.current) ro.observe(boxRef.current);
     return () => {
       disposed = true;
       window.removeEventListener("resize", onResize);
+      ro?.disconnect();
       if (boxRef.current && libRef.current) libRef.current.dispose(boxRef.current);
       chartRef.current = null;
       subPanes.current.clear();
@@ -214,6 +218,7 @@ export function KlineChart({ code, className, ...props }: KlineChartProps) {
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart || !bars) return;
+    chart.resize();
     chart.applyNewData(aggregate(bars, interval));
   }, [bars, interval, version]);
 
