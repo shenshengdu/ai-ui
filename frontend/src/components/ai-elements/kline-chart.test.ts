@@ -43,3 +43,18 @@ describe("streaming spec", () => {
     expect(parseSpec(full)?.interval).toBe("week");
   });
 });
+
+import { parseParams } from "./kline-chart";
+
+describe("indicator params", () => {
+  it("parses and validates", () => {
+    expect(parseParams("MA", "5, 10，20 60")).toEqual([5, 10, 20, 60]);
+    expect(parseParams("MA", "5,10,20,30,60,120")).toBeNull();          // 最多 5 个
+    expect(parseParams("MACD", "12,26")).toBeNull();                     // 要正好 3 个
+    expect(parseParams("MACD", "8,17,9")).toEqual([8, 17, 9]);
+    expect(parseParams("BOLL", "20, 2.5")).toEqual([20, 2.5]);
+    expect(parseParams("RSI", "0")).toBeNull();
+    expect(parseParams("RSI", "abc")).toBeNull();
+    expect(parseParams("XYZ", "5")).toBeNull();
+  });
+});

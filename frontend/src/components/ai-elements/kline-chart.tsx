@@ -7,7 +7,7 @@
  */
 
 import { cn } from "@/lib/utils";
-import { ExternalLinkIcon, TriangleAlertIcon } from "lucide-react";
+import { ExternalLinkIcon, RotateCcwIcon, Settings2Icon, TriangleAlertIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState, type HTMLAttributes } from "react";
 import type { Chart, KLineData } from "klinecharts";
@@ -60,6 +60,50 @@ export function parseSpec(code: unknown): KlineSpec | null {
     ? raw.indicators.map((x) => String(x).toUpperCase()).filter((x) => ALL_INDICATORS.includes(x))
     : [];
   return { symbol, period, interval, indicators: ind.length ? Array.from(new Set(ind)) : ["MA", "VOL"] };
+}
+
+/** 指标参数：默认值（KLineChart 自带的）、最多几个数、每个数的范围 */
+export const PARAM_RULES: Record<string, { def: number[]; max: number; min: number; hi: number; float?: boolean }> = {
+  MA: { def: [5, 10, 30, 60], max: 5, min: 1, hi: 500 },
+  EMA: { def: [6, 12, 20], max: 5, min: 1, hi: 500 },
+  BOLL: { def: [20, 2], max: 2, min: 0.1, hi: 500, float: true },
+  VOL: { def: [5, 10, 20], max: 3, min: 1, hi: 500 },
+  MACD: { def: [12, 26, 9], max: 3, min: 1, hi: 500 },
+  KDJ: { def: [9, 3, 3], max: 3, min: 1, hi: 500 },
+  RSI: { def: [6, 12, 24], max: 3, min: 1, hi: 500 },
+};
+const PARAMS_KEY = "kline.indicatorParams";
+
+/** "5, 10,20 60" → [5, 10, 20, 60]；不合法 → null（MACD、KDJ、BOLL 要正好那么多个数） */
+export function parseParams(name: string, text: string): number[] | null {
+  const rule = PARAM_RULES[name];
+  if (!rule) return null;
+  const nums = text.split(/[\s,，、]+/).filter(Boolean).map(Number);
+  if (!nums.length || nums.length > rule.max || nums.some((n) => !Number.isFinite(n) || n < rule.min || n > rule.hi)) return null;
+  if (["MACD", "KDJ", "BOLL"].includes(name) && nums.length !== rule.def.length) return null;
+  return rule.float ? nums.map((n, i) => (i === 0 ? Math.round(n) : n)) : nums.map((n) => Math.round(n));
+}
+
+function loadParams(): Record<string, number[]> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PARAMS_KEY) || "{}");
+    const out: Record<string, number[]> = {};
+    for (const [k, v] of Object.entries(raw)) {
+      const ok = Array.isArray(v) ? parseParams(k, (v as unknown[]).join(",")) : null;
+      if (ok) out[k] = ok;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function saveParams(p: Record<string, number[]>) {
+  try {
+    localStorage.setItem(PARAMS_KEY, JSON.stringify(p));
+  } catch {
+    /* 隐私模式等存不了：只在这次页面里生效 */
+  }
 }
 
 type Bar = { t: string; o: number | null; h: number | null; l: number | null; c: number | null; v: number | null };
@@ -163,6 +207,9 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
   const libRef = useRef<typeof import("klinecharts") | null>(null);
   const subPanes = useRef<Map<string, string>>(new Map());
   const [version, setVersion] = useState(0);
+  const [params, setParams] = useState<Record<string, number[]>>(loadParams);
+  const [showParams, setShowParams] = useState(false);
+  const paramsKey = JSON.stringify(params);
   // 规格（流式输出时晚一步才完整）一出来就套用它的范围、周期、指标；之后用户点工具栏不受影响
   const specKey = spec ? `${spec.symbol}|${spec.period}|${spec.interval}|${spec.indicators.join(",")}` : "";
   useEffect(() => {
@@ -258,9 +305,10 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart) return;
+    const spec = (name: string) => (params[name] ? { name, calcParams: params[name] } : name);
     for (const name of MAIN_INDICATORS) {
       chart.removeIndicator("candle_pane", name);
-      if (indicators.includes(name)) chart.createIndicator(name, true, { id: "candle_pane" });
+      if (indicators.includes(name)) chart.createIndicator(spec(name), true, { id: "candle_pane" });
     }
     for (const name of SUB_INDICATORS) {
       const pane = subPanes.current.get(name);
@@ -268,11 +316,14 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
         chart.removeIndicator(pane, name);
         subPanes.current.delete(name);
       } else if (!pane && indicators.includes(name)) {
-        const id = chart.createIndicator(name, false, { height: 80 });
+        const id = chart.createIndicator(spec(name), false, { height: 80 });
         if (id) subPanes.current.set(name, id);
+      } else if (pane) {
+        chart.overrideIndicator({ name, calcParams: params[name] ?? PARAM_RULES[name].def }, pane);   // 参数改了：原地更新
       }
     }
-  }, [indicators, version]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [indicators, version, paramsKey]);
 
   if (!spec) {
     return (
@@ -319,6 +370,15 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
           ))}
         </div>
         {loading && <span className="text-xs text-muted-foreground">{t("kline.loading")}</span>}
+        <button
+          type="button"
+          title={t("kline.params")}
+          aria-label={t("kline.params")}
+          onClick={() => setShowParams((v) => !v)}
+          className={cn("rounded p-1 text-muted-foreground hover:bg-muted", showParams && "bg-muted", pageMode && "ml-auto")}
+        >
+          <Settings2Icon className="size-3.5" />
+        </button>
         {!pageMode && (
           <button
             type="button"
@@ -327,12 +387,30 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
             onClick={() =>
               navigate(`/kline?symbol=${encodeURIComponent(spec.symbol)}&period=${range}&interval=${interval}&indicators=${indicators.join(",")}`)
             }
-            className="ml-auto rounded p-1 text-muted-foreground hover:bg-muted"
+            className="rounded p-1 text-muted-foreground hover:bg-muted"
           >
             <ExternalLinkIcon className="size-3.5" />
           </button>
         )}
       </div>
+      {showParams && (
+        <ParamsPanel
+          params={params}
+          onChange={(name, v) => {
+            setParams((cur) => {
+              const next = { ...cur };
+              if (v) next[name] = v;
+              else delete next[name];
+              saveParams(next);
+              return next;
+            });
+          }}
+          onReset={() => {
+            setParams({});
+            saveParams({});
+          }}
+        />
+      )}
       {error && (
         <div className="flex items-center gap-2 px-3 py-2 text-sm text-destructive">
           <TriangleAlertIcon className="size-4" /> {t("kline.error")}：{error}
@@ -343,3 +421,63 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
     </div>
   );
 }
+
+function ParamsPanel({
+  params,
+  onChange,
+  onReset,
+}: {
+  params: Record<string, number[]>;
+  onChange: (name: string, v: number[] | null) => void;
+  onReset: () => void;
+}) {
+  const { t } = useI18n();
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [bad, setBad] = useState<Record<string, boolean>>({});
+  const commit = (name: string) => {
+    const text = draft[name];
+    if (text === undefined) return;
+    if (!text.trim()) {
+      onChange(name, null);                         // 清空 = 恢复默认
+      setBad((b) => ({ ...b, [name]: false }));
+      return;
+    }
+    const v = parseParams(name, text);
+    setBad((b) => ({ ...b, [name]: !v }));
+    if (v) onChange(name, v);
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b bg-muted/30 px-2 py-2 text-xs">
+      {Object.keys(PARAM_RULES).map((name) => (
+        <label key={name} className="flex items-center gap-1.5">
+          <span className="w-10 font-medium">{name}</span>
+          <input
+            value={draft[name] ?? (params[name] ?? PARAM_RULES[name].def).join(", ")}
+            onChange={(e) => setDraft((d) => ({ ...d, [name]: e.target.value }))}
+            onBlur={() => commit(name)}
+            onKeyDown={(e) => e.key === "Enter" && commit(name)}
+            className={cn(
+              "h-6 w-28 rounded border bg-background px-1.5 font-mono outline-none",
+              bad[name] && "border-destructive",
+              params[name] && "text-primary",
+            )}
+            aria-label={`${name} ${t("kline.params")}`}
+          />
+        </label>
+      ))}
+      <button
+        type="button"
+        onClick={() => {
+          setDraft({});
+          setBad({});
+          onReset();
+        }}
+        className="ml-auto flex items-center gap-1 rounded px-2 py-1 text-muted-foreground hover:bg-muted"
+      >
+        <RotateCcwIcon className="size-3" /> {t("kline.paramsReset")}
+      </button>
+      <span className="basis-full text-[11px] text-muted-foreground">{t("kline.paramsHint")}</span>
+    </div>
+  );
+}
+
