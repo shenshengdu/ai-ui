@@ -35,3 +35,11 @@ describe("aggregate", () => {
     expect(m[0]).toMatchObject({ open: 9, high: 13, low: 7, close: 8, volume: 350 });
   });
 });
+
+describe("streaming spec", () => {
+  it("partial JSON is not a spec yet, full JSON is", () => {
+    const full = '{"symbol":"600519.SH","interval":"week"}';
+    expect(parseSpec(full.slice(0, 12))).toBeNull();
+    expect(parseSpec(full)?.interval).toBe("week");
+  });
+});

@@ -150,7 +150,16 @@ export function KlineChart({ code, className, ...props }: KlineChartProps) {
   const chartRef = useRef<Chart | null>(null);
   const libRef = useRef<typeof import("klinecharts") | null>(null);
   const subPanes = useRef<Map<string, string>>(new Map());
-  const [version, setVersion] = useState(0);        // 图建好后 +1，触发样式、数据、指标的 effect
+  const [version, setVersion] = useState(0);
+  // 规格（流式输出时晚一步才完整）一出来就套用它的范围、周期、指标；之后用户点工具栏不受影响
+  const specKey = spec ? `${spec.symbol}|${spec.period}|${spec.interval}|${spec.indicators.join(",")}` : "";
+  useEffect(() => {
+    if (!spec) return;
+    setRange(spec.period);
+    setIntervalKind(spec.interval);
+    setIndicators(spec.indicators);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [specKey]);        // 图建好后 +1，触发样式、数据、指标的 effect
 
   // 取数据（范围变了才重新取）
   useEffect(() => {
@@ -176,8 +185,11 @@ export function KlineChart({ code, className, ...props }: KlineChartProps) {
     };
   }, [spec, range]);
 
-  // 建图（只建一次）
+  // 建图：等图表区域真的出现了再建。流式输出时代码块里的 JSON 先是半截（spec 为空、没有图表区域），
+  // 写完才出现区域——只在第一次渲染时建会永远建不起来（空白，刷新后才有）
+  const hasSpec = spec !== null;
   useEffect(() => {
+    if (!hasSpec) return;
     let disposed = false;
     import("klinecharts").then((lib) => {
       if (disposed || !boxRef.current) return;
@@ -200,7 +212,7 @@ export function KlineChart({ code, className, ...props }: KlineChartProps) {
       chartRef.current = null;
       subPanes.current.clear();
     };
-  }, []);
+  }, [hasSpec]);
 
   // 主题、涨跌颜色
   useEffect(() => {
