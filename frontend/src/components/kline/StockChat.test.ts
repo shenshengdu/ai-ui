@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activePath, chatModels, convTitle, findStockConversation, pageContext } from "./StockChat";
+import { activePath, archiveTitle, chatModels, convTitle, findStockConversation, fmtTokens, pageContext } from "./StockChat";
 import type { Message, Model } from "@/lib/api/types";
 
 const m = (id: string, name: string): Model => ({ id, name, provider: "p", is_enabled: true });
@@ -46,5 +46,18 @@ describe("pageContext 长度", () => {
     expect(c).toContain("只聊投资相关");
     expect(c).toContain("不发布报告");
     expect(c).toContain("kind=profile");
+  });
+});
+
+describe("清空上下文、token", () => {
+  it("存档标题不再被当成这只股票的对话", () => {
+    const t = archiveTitle("600519.SH", "贵州茅台", new Date(2026, 10, 13, 15, 30));
+    expect(t).toBe("🗂 600519.SH 贵州茅台 · 2026-11-13 15:30 存档");
+    expect(findStockConversation([{ id: "old", title: t }], "600519.SH")).toBeUndefined();
+  });
+  it("token 显示", () => {
+    expect(fmtTokens(12345)).toBe("12.3k");
+    expect(fmtTokens(800)).toBe("800");
+    expect(fmtTokens(undefined)).toBe("");
   });
 });

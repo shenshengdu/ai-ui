@@ -25,6 +25,27 @@ const (
 type contextBudget struct {
 	maxTurns     int  // 0 = unlimited
 	compactTools bool // shorten tool outputs of older turns
+	recentFull   int  // user turns whose tool results are kept verbatim; 0 = recentToolTurns
+}
+
+func (b contextBudget) recentTools() int {
+	if b.recentFull > 0 {
+		return b.recentFull
+	}
+	return recentToolTurns
+}
+
+// K 线页聊天框省 token：最多带最近 pageMaxTurns 轮（用户设置更少就按用户的），
+// 旧轮的工具结果一律截短，只有最近一轮的工具结果原样保留
+const pageMaxTurns = 6
+
+func pageBudget(b contextBudget) contextBudget {
+	if b.maxTurns == 0 || b.maxTurns > pageMaxTurns {
+		b.maxTurns = pageMaxTurns
+	}
+	b.compactTools = true
+	b.recentFull = 1
+	return b
 }
 
 func loadContextBudget(user string) contextBudget {
