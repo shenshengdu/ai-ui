@@ -5,7 +5,7 @@
  * 搜索走后端 /api/tools/finance/search，日 K 走 /api/tools/finance/kline（平台 key 只在服务器）。
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeftIcon, CandlestickChartIcon, GlobeIcon, SearchIcon } from "lucide-react";
 import { MARKET_GROUPS, MARKET_NAME } from "./markets";
@@ -34,6 +34,87 @@ function useChartHeight() {
     return () => window.removeEventListener("resize", on);
   }, []);
   return h;
+}
+
+const SPLIT_KEY = "kline.splitRatio";
+const MIN_CHART = 240;
+const MIN_PANEL = 120;
+
+function readRatio(): number {
+  try {
+    const v = Number(localStorage.getItem(SPLIT_KEY));
+    return v > 0.2 && v < 0.95 ? v : 0.62;
+  } catch {
+    return 0.62;
+  }
+}
+
+/** 上图下表：图高 = 可用高度 × 比例；中间拖动条调比例（记在本机）。图上的滚轮归图表缩放，所以表格放在单独的滚动区里。 */
+function SplitView({ chart, panel }: { chart: (h: number) => ReactNode; panel: ReactNode }) {
+  const { t } = useI18n();
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [avail, setAvail] = useState(0);
+  const [ratio, setRatio] = useState(readRatio);
+  const drag = useRef<{ y: number; h: number } | null>(null);
+
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const on = () => setAvail(el.clientHeight);
+    on();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(on) : null;
+    ro?.observe(el);
+    window.addEventListener("resize", on);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", on);
+    };
+  }, []);
+
+  const handle = 10;
+  const clamp = (h: number) => Math.max(MIN_CHART, Math.min(h, avail - handle - MIN_PANEL));
+  const chartH = avail ? clamp(Math.round((avail - handle) * ratio)) : MIN_CHART;
+
+  const setH = (h: number) => {
+    const r = clamp(h) / Math.max(1, avail - handle);
+    setRatio(r);
+    try {
+      localStorage.setItem(SPLIT_KEY, r.toFixed(3));
+    } catch {
+      /* 本机存不了就算了 */
+    }
+  };
+
+  return (
+    <div ref={boxRef} className="flex min-h-0 flex-1 flex-col">
+      <div style={{ height: chartH }} className="shrink-0 overflow-y-auto overflow-x-hidden">
+        {chart(Math.max(200, chartH - 66))}
+      </div>
+      <div
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label={t("kline.dragResize")}
+        title={t("kline.dragResize")}
+        tabIndex={0}
+        onPointerDown={(e) => {
+          drag.current = { y: e.clientY, h: chartH };
+          (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        }}
+        onPointerMove={(e) => drag.current && setH(drag.current.h + e.clientY - drag.current.y)}
+        onPointerUp={() => (drag.current = null)}
+        onPointerCancel={() => (drag.current = null)}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowUp") setH(chartH - 40);
+          else if (e.key === "ArrowDown") setH(chartH + 40);
+        }}
+        style={{ height: handle }}
+        className="group flex shrink-0 cursor-row-resize touch-none items-center justify-center"
+      >
+        <div className="h-1 w-12 rounded-full bg-border group-hover:bg-muted-foreground/50" />
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col">{panel}</div>
+    </div>
+  );
 }
 
 export function KlinePage() {
@@ -203,12 +284,18 @@ export function KlinePage() {
           ))}
         </div>
       )}
-      <main className="min-h-0 flex-1 overflow-auto px-3 py-2">
+      <main className={cn("min-h-0 flex-1 px-3 py-2", spec && hasCompanyData(spec.symbol) ? "flex flex-col" : "overflow-auto")}>
         {spec ? (
           <>
-            {current?.name && <div className="px-1 pb-1 text-sm text-muted-foreground">{current.name}</div>}
-            <KlineChart key={spec.symbol} spec={spec} height={height} pageMode className="my-0" />
-            {hasCompanyData(spec.symbol) && <CompanyPanel key={`co-${spec.symbol}`} symbol={spec.symbol} />}
+            {current?.name && <div className="shrink-0 px-1 pb-1 text-sm text-muted-foreground">{current.name}</div>}
+            {hasCompanyData(spec.symbol) ? (
+              <SplitView
+                chart={(h) => <KlineChart key={spec.symbol} spec={spec} height={h} pageMode fitHeight className="my-0" />}
+                panel={<CompanyPanel key={`co-${spec.symbol}`} symbol={spec.symbol} className="min-h-0 flex-1" />}
+              />
+            ) : (
+              <KlineChart key={spec.symbol} spec={spec} height={height} pageMode className="my-0" />
+            )}
           </>
         ) : (
           <div className="mx-auto mt-16 max-w-md text-center text-sm text-muted-foreground">

@@ -202,6 +202,7 @@ export const zh: Record<MessageKey, string> = {
   "kline.delisted": "已退市",
   "kline.back": "回到对话",
   "kline.emptyHint": "搜索一只股票，查看它的全部历史日 K",
+  "kline.dragResize": "拖动调整图表和下方面板的高度",
   "kline.tab.announcements": "公告",
   "kline.tab.financials": "主要财务",
   "kline.loadingAnn": "加载中…（第一次查这只股票要补近 3 年公告，可能要半分钟）",

@@ -203,7 +203,7 @@ function FinTable({ symbol }: { symbol: string }) {
   );
 }
 
-export function CompanyPanel({ symbol }: { symbol: string }) {
+export function CompanyPanel({ symbol, className }: { symbol: string; className?: string }) {
   const { t } = useI18n();
   const [tab, setTab] = useState<Kind>("announcements");
   const tabs: { key: Kind; label: string; icon: typeof FileTextIcon }[] = [
@@ -211,8 +211,8 @@ export function CompanyPanel({ symbol }: { symbol: string }) {
     { key: "financials", label: t("kline.tab.financials"), icon: TableIcon },
   ];
   return (
-    <section className="mt-3 rounded-md border">
-      <div role="tablist" className="flex gap-1 border-b px-2 pt-1">
+    <section className={cn("flex flex-col rounded-md border", className)}>
+      <div role="tablist" className="flex shrink-0 gap-1 border-b px-2 pt-1">
         {tabs.map(({ key, label, icon: Icon }) => (
           <button
             key={key}
@@ -230,7 +230,7 @@ export function CompanyPanel({ symbol }: { symbol: string }) {
           </button>
         ))}
       </div>
-      <div className="px-3 py-2">{tab === "announcements" ? <AnnouncementList symbol={symbol} /> : <FinTable symbol={symbol} />}</div>
+      <div className="min-h-0 flex-1 overflow-auto overscroll-contain px-3 py-2">{tab === "announcements" ? <AnnouncementList symbol={symbol} /> : <FinTable symbol={symbol} />}</div>
     </section>
   );
 }
