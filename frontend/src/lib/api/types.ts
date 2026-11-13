@@ -3,6 +3,8 @@
 export interface AuthStatus {
   authenticated: boolean;
   registration_enabled: boolean;
+  /** 服务器开了免登录（AUTO_LOGIN_USER）：不显示登录页和「登出」 */
+  auto_login?: boolean;
 }
 
 // File types

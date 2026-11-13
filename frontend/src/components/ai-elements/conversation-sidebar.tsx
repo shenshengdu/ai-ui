@@ -538,7 +538,7 @@ const AccountMenu = ({
   onOpenSettings?: () => void;
   onOpenShortcuts?: () => void;
 }) => {
-  const { isAuthenticated, isCheckingAuth, logout, isLoading } = useAuth();
+  const { isAuthenticated, isCheckingAuth, logout, isLoading, autoLogin } = useAuth();
   const { theme, setTheme } = useTheme();
   const { t, pref, setPref } = useI18n();
   const [loginOpen, setLoginOpen] = useState(false);
@@ -651,16 +651,20 @@ const AccountMenu = ({
             {t("account.gatewayStatus")}
           </a>
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          disabled={isLoading}
-          onSelect={() => {
-            logout().catch((err) => console.error("Logout failed:", err));
-          }}
-        >
-          <LogOutIcon />
-          {isLoading ? t("account.loggingOut") : t("account.logOut")}
-        </DropdownMenuItem>
+        {!autoLogin && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              disabled={isLoading}
+              onSelect={() => {
+                logout().catch((err) => console.error("Logout failed:", err));
+              }}
+            >
+              <LogOutIcon />
+              {isLoading ? t("account.loggingOut") : t("account.logOut")}
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

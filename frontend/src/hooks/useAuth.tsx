@@ -23,6 +23,8 @@ interface AuthContextType {
   /** Abort an in-flight ChatGPT OAuth attempt (waiting modal closed, etc.). */
   cancelChatGPTOAuth: () => void;
   logout: () => Promise<void>;
+  /** 服务器开了免登录：任何人打开都是默认账户，不显示「登出」 */
+  autoLogin: boolean;
   register: (username: string, password: string) => Promise<void>;
   error: string | null;
   clearError: () => void;
@@ -39,6 +41,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [registrationEnabled, setRegistrationEnabled] = useState(true);
+  const [autoLogin, setAutoLogin] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [chatgptOAuthPending, setChatgptOAuthPending] = useState(false);
   const oauthAbortRef = useRef<AbortController | null>(null);
@@ -50,6 +53,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const status = await authAPI.getAuthStatus();
         setIsAuthenticated(status.authenticated);
         setRegistrationEnabled(status.registration_enabled !== false);
+        setAutoLogin(status.auto_login === true);
       } catch (err) {
         console.error("Error checking auth status:", err);
         setIsAuthenticated(false);
@@ -265,6 +269,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     submitChatGPTCallbackUrl,
     cancelChatGPTOAuth,
     logout,
+    autoLogin,
     register,
     error,
     clearError,
