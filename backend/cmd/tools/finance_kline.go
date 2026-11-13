@@ -60,6 +60,11 @@ func financeKline(w http.ResponseWriter, r *http.Request) {
 			Error: "代码格式：美股 AAPL、A 股 600519.SH、港股 0700.HK、指数 ^N225、期货 GC=F、汇率 CNH=X"})
 		return
 	}
+	cacheKey := symbol + "|" + period
+	if c, ok := klineCacheGet(cacheKey); ok {
+		klineWrite(w, r, c, true)
+		return
+	}
 	base := strings.TrimRight(strings.TrimSpace(os.Getenv("FINANCE_BASE_URL")), "/")
 	key := strings.TrimSpace(os.Getenv("FINANCE_API_KEY"))
 	if base == "" || key == "" {
@@ -94,7 +99,9 @@ func financeKline(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out.Status, out.Symbol, out.Period = "success", symbol, period
-	klineJSON(w, http.StatusOK, out)
+	c := klineEncode(out)
+	klineCachePut(cacheKey, c)
+	klineWrite(w, r, c, false)
 }
 
 // 平台 /api/v1/history 返回 {"source": ..., "data": [{"date","open","high","low","close","volume"}]}

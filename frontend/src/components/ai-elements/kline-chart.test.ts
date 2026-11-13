@@ -58,3 +58,16 @@ describe("indicator params", () => {
     expect(parseParams("XYZ", "5")).toBeNull();
   });
 });
+
+describe("klineCache", () => {
+  it("同一范围直接给；有全部历史时截取其他范围；过期不给", async () => {
+    const { klineCacheGet, klineCachePut } = await import("./kline-chart");
+    const now = Date.parse("2026-11-13T00:00:00Z");
+    const bars = ["2020-01-02", "2026-06-01", "2026-11-12"].map((t) => ({ t, o: 1, h: 1, l: 1, c: 1, v: 1 }));
+    klineCachePut("TEST.SH", "max", bars, "ahdb", now);
+    expect(klineCacheGet("TEST.SH", "max", now)?.bars.length).toBe(3);
+    expect(klineCacheGet("TEST.SH", "1y", now)?.bars.map((b) => b.t)).toEqual(["2026-06-01", "2026-11-12"]);
+    expect(klineCacheGet("TEST.SH", "1y", now + 11 * 60 * 1000)).toBeNull();
+    expect(klineCacheGet("OTHER", "1y", now)).toBeNull();
+  });
+});
