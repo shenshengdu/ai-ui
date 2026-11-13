@@ -10,6 +10,7 @@ export type ChartAction =
   | { type: "interval"; value: Interval }
   | { type: "indicators"; add?: string[]; remove?: string[] }
   | { type: "symbol"; value: string }
+  | { type: "compare"; symbols: string[] }
   | { type: "clear" };
 
 export const CHART_INDICATORS = ["MA", "EMA", "BOLL", "VOL", "MACD", "KDJ", "RSI"];
@@ -61,6 +62,11 @@ export function parseChartActions(code: string): ChartAction[] {
         if (SYMBOL.test(v)) out.push({ type: "symbol", value: v });
         break;
       }
+      case "compare": {
+        const syms = Array.isArray(o.symbols) ? o.symbols.map((x) => String(x).trim().toUpperCase()).filter((x) => SYMBOL.test(x)) : [];
+        if (syms.length) out.push({ type: "compare", symbols: [...new Set(syms)].slice(0, 5) });
+        break;
+      }
       case "clear":
         out.push({ type: "clear" });
         break;
@@ -95,6 +101,8 @@ export function describeActions(actions: ChartAction[]): string {
           return [...(a.add ?? []).map((x) => `+${x}`), ...(a.remove ?? []).map((x) => `-${x}`)].join(" ");
         case "symbol":
           return `→ ${a.value}`;
+        case "compare":
+          return `对比 ${a.symbols.join("、")}`;
         case "clear":
           return "清除标注";
       }

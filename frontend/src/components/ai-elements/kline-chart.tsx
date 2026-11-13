@@ -27,6 +27,11 @@ type KlineChartProps = HTMLAttributes<HTMLDivElement> & {
   fitHeight?: boolean;
   /** K 线页：AI 发来的图上操作（seq 变了才执行一次；数据到了再执行） */
   command?: { seq: number; actions: ChartAction[] } | null;
+  /** 对比页的小图：不显示工具栏（周期、范围由外面的 spec 定），只显示标题 */
+  bare?: boolean;
+  title?: string;
+  /** 拿到 / 释放图表实例（对比页同步十字线用） */
+  onChart?: (chart: Chart | null) => void;
 };
 
 export type Interval = "day" | "week" | "month" | "quarter" | "year";
@@ -112,7 +117,7 @@ function saveParams(p: Record<string, number[]>) {
   }
 }
 
-type Bar = { t: string; o: number | null; h: number | null; l: number | null; c: number | null; v: number | null };
+export type Bar = { t: string; o: number | null; h: number | null; l: number | null; c: number | null; v: number | null };
 
 /** 日 K → 日 / 周（周一开始）/ 月 / 季 / 年 K */
 export function aggregate(bars: Bar[], interval: Interval): KLineData[] {
@@ -207,6 +212,20 @@ export function klineCachePut(symbol: string, range: Range, bars: Bar[], source:
   if (klineCache.size > 40) klineCache.delete(klineCache.keys().next().value as string);
 }
 
+/** 取日 K（先看浏览器缓存）：对比页、K 线图共用 */
+export async function fetchKlineBars(symbol: string, range: Range): Promise<{ bars: Bar[]; source: string }> {
+  const hit = klineCacheGet(symbol, range);
+  if (hit) return hit;
+  const r = await fetch(`/api/tools/finance/kline?symbol=${encodeURIComponent(symbol)}&period=${range}`, {
+    headers: getHeaders(),
+    credentials: "include",
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || d.status !== "success") throw new Error(d.error || `HTTP ${r.status}`);
+  klineCachePut(symbol, range, d.data as Bar[], d.source || "");
+  return { bars: d.data as Bar[], source: d.source || "" };
+}
+
 export function klineCacheGet(symbol: string, range: Range, now = Date.now()): { bars: Bar[]; source: string } | null {
   const fresh = (k: string) => {
     const c = klineCache.get(k);
@@ -270,7 +289,9 @@ function registerAiOverlays(lib: typeof import("klinecharts")) {
   });
 }
 
-export function KlineChart({ code, spec: specProp, height = 320, pageMode = false, fitHeight = false, command, className, ...props }: KlineChartProps) {
+export function KlineChart({ code, spec: specProp, height = 320, pageMode = false, fitHeight = false, command, bare = false, title, onChart, className, ...props }: KlineChartProps) {
+  const onChartRef = useRef(onChart);
+  onChartRef.current = onChart;
   const { t } = useI18n();
   const navigate = useNavigate();
   const specPropKey = specProp ? JSON.stringify(specProp) : "";
@@ -318,17 +339,11 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
       setLoading(false);
       return;
     }
-    fetch(`/api/tools/finance/kline?symbol=${encodeURIComponent(spec.symbol)}&period=${range}`, {
-      headers: getHeaders(),
-      credentials: "include",
-    })
-      .then(async (r) => {
-        const d = await r.json().catch(() => ({}));
+    fetchKlineBars(spec.symbol, range)
+      .then((d) => {
         if (cancelled) return;
-        if (!r.ok || d.status !== "success") throw new Error(d.error || `HTTP ${r.status}`);
-        klineCachePut(spec.symbol, range, d.data as Bar[], d.source || "");
-        setBars(d.data as Bar[]);
-        setSource(d.source || "");
+        setBars(d.bars);
+        setSource(d.source);
       })
       .catch((e: unknown) => !cancelled && setError(e instanceof Error ? e.message : String(e)))
       .finally(() => !cancelled && setLoading(false));
@@ -350,6 +365,7 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
       const chart = lib.init(boxRef.current, { timezone: "UTC", locale: "zh-CN" });
       chartRef.current = chart;
       chart?.setPriceVolumePrecision(2, 0);
+      onChartRef.current?.(chart ?? null);
       setVersion((v) => v + 1);
     });
     // 跟着图表区域本身的大小重画：流式输出时组件建好那一刻宽度可能还是 0，之后才变宽（只听窗口大小会一直是空白）
@@ -363,6 +379,7 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
       ro?.disconnect();
       if (boxRef.current && libRef.current) libRef.current.dispose(boxRef.current);
       chartRef.current = null;
+      onChartRef.current?.(null);
       subPanes.current.clear();
     };
   }, [hasSpec]);
@@ -471,6 +488,14 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
 
   return (
     <div className={cn("my-2 w-full rounded-md border", className)} {...props}>
+      {bare && (
+        <div className="flex items-center gap-2 border-b px-2 py-1 text-xs">
+          <span className="truncate font-medium">{title ?? spec.symbol}</span>
+          {title && <span className="font-mono text-muted-foreground">{spec.symbol}</span>}
+          {loading && <span className="text-muted-foreground">{t("kline.loading")}</span>}
+        </div>
+      )}
+      {!bare && (
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-2 py-1.5">
         <span className="text-sm font-medium">{spec.symbol}</span>
         <div className="flex gap-0.5">
@@ -528,7 +553,8 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
           </button>
         )}
       </div>
-      {showParams && (
+      )}
+      {showParams && !bare && (
         <ParamsPanel
           params={params}
           onChange={(name, v) => {
@@ -552,7 +578,7 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
         </div>
       )}
       <div ref={boxRef} style={{ height: fitHeight ? Math.max(height, 140 + subCount * 80) : height + subCount * 80 }} className="w-full" />
-      {source && <div className="px-2 pb-1 text-right text-[11px] text-muted-foreground">{t("kline.source")}：{source}</div>}
+      {source && !bare && <div className="px-2 pb-1 text-right text-[11px] text-muted-foreground">{t("kline.source")}：{source}</div>}
     </div>
   );
 }

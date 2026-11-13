@@ -105,6 +105,7 @@ export function pageContext(symbol: string, name?: string): string {
 - {"type":"interval","value":"week"} 切周期（day / week / month / quarter / year）
 - {"type":"indicators","add":["MACD"],"remove":["BOLL"]} 开关指标（MA EMA BOLL VOL MACD KDJ RSI）
 - {"type":"symbol","value":"0700.HK"} 换成另一只股票
+- {"type":"compare","symbols":["000858.SZ","000568.SZ"]} 打开同行对比页（并排 K 线、涨跌、财务指标；当前股票自动在内，最多再加 5 只）——做同行比较时用
 - {"type":"clear"} 先清掉之前画的线和区间
 说到具体的支撑位、压力位、形态区间时就画出来（通常先 clear 再画）；价位和日期必须来自工具返回的数据。一条回答最多一个 chart 块，放在最后，不要在正文里解释这个代码块。`;
 }

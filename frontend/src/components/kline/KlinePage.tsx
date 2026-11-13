@@ -7,7 +7,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeftIcon, CandlestickChartIcon, GlobeIcon, MessageSquareIcon, SearchIcon } from "lucide-react";
+import { ArrowLeftIcon, CandlestickChartIcon, GitCompareIcon, GlobeIcon, MessageSquareIcon, SearchIcon } from "lucide-react";
 import { StockChat } from "./StockChat";
 import type { ChartAction } from "./chart-actions";
 import { ALL_MARKET_SYMBOLS, MARKET_GROUPS, MARKET_NAME, fmtQuotePct, fmtQuotePrice, type MarketQuote } from "./markets";
@@ -287,6 +287,12 @@ export function KlinePage() {
   // AI 的图上操作：换股票由这里做，其余交给图（换了股票，图重建后数据到了再执行）
   const [chartCmd, setChartCmd] = useState<{ seq: number; actions: ChartAction[] } | null>(null);
   const onChartActions = (actions: ChartAction[]) => {
+    const cmp = actions.find((a) => a.type === "compare");
+    if (cmp && cmp.type === "compare") {
+      const list = [symbol, ...cmp.symbols.filter((x) => x !== symbol)].slice(0, 6);
+      navigate(`/compare?symbols=${encodeURIComponent(list.join(","))}`);
+      return;
+    }
     const sw = [...actions].reverse().find((a) => a.type === "symbol");
     const rest = actions.filter((a) => a.type !== "symbol");
     if (sw && sw.type === "symbol" && sw.value !== symbol) pick({ symbol: sw.value });
@@ -368,6 +374,17 @@ export function KlinePage() {
           <GlobeIcon className="size-4" />
           <span className="hidden sm:inline">{t("kline.markets")}</span>
         </button>
+        {spec && (
+          <button
+            type="button"
+            onClick={() => navigate(`/compare?symbols=${encodeURIComponent(spec.symbol)}`)}
+            className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-muted"
+            title={t("compare.open")}
+          >
+            <GitCompareIcon className="size-4" />
+            <span className="hidden sm:inline">{t("compare.open")}</span>
+          </button>
+        )}
         {spec && (
           <button
             type="button"

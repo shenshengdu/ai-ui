@@ -13,6 +13,7 @@ describe("chart actions", () => {
       { type: "indicators", add: ["macd", "foo"], remove: ["BOLL"] },
       { type: "symbol", value: "0700.hk" },
       { type: "symbol", value: "../x" },
+      { type: "compare", symbols: ["000858.sz", "../x", "000858.SZ", "600809.SH"] },
       { type: "clear" },
       { type: "rm -rf" },
     ] }));
@@ -22,6 +23,7 @@ describe("chart actions", () => {
       { type: "interval", value: "week" },
       { type: "indicators", add: ["MACD"], remove: ["BOLL"] },
       { type: "symbol", value: "0700.HK" },
+      { type: "compare", symbols: ["000858.SZ", "600809.SH"] },
       { type: "clear" },
     ]);
     expect(parseChartActions("不是 JSON")).toEqual([]);
