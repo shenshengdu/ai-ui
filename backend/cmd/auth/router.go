@@ -17,6 +17,7 @@ import (
 type AuthStatus struct {
 	Authenticated       bool `json:"authenticated"`
 	RegistrationEnabled bool `json:"registration_enabled"`
+	AutoLogin           bool `json:"auto_login"`
 }
 
 type RegisterRequest struct {
@@ -144,7 +145,7 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 func Register() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !allowRegistration {
+		if !allowRegistration || AutoLoginEnabled() {
 			http.Error(w, "Registration is disabled", http.StatusForbidden)
 			return
 		}
@@ -204,23 +205,15 @@ func Logout() http.HandlerFunc {
 
 func Authenticated(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie(AUTH_COOKIE)
-		if err != nil {
-			log.Warn("Unauthorized access attempt", "path", r.URL.Path, "ip", r.RemoteAddr)
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		claims, err := extractClaims(cookie.Value)
-		if err != nil {
-			log.Warn("Invalid auth token", "path", r.URL.Path, "ip", r.RemoteAddr)
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		username, ok := claimUsername(claims)
-		if !ok {
-			log.Warn("Auth token missing username", "path", r.URL.Path, "ip", r.RemoteAddr)
+		username, claims, why := userFromCookie(r)
+		if username == "" {
+			// 免登录：没有有效 cookie 就当默认账户
+			if name := autoLogin(w); name != "" {
+				r = r.WithContext(context.WithValue(r.Context(), "user", name))
+				next.ServeHTTP(w, r)
+				return
+			}
+			log.Warn(why, "path", r.URL.Path, "ip", r.RemoteAddr)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -233,27 +226,37 @@ func Authenticated(next http.Handler) http.Handler {
 	})
 }
 
+// userFromCookie 有效登录 cookie 里的用户名；没有 → ""，why 是原因（写日志用）
+func userFromCookie(r *http.Request) (string, map[string]any, string) {
+	cookie, err := r.Cookie(AUTH_COOKIE)
+	if err != nil {
+		return "", nil, "Unauthorized access attempt"
+	}
+	claims, err := extractClaims(cookie.Value)
+	if err != nil {
+		return "", nil, "Invalid auth token"
+	}
+	username, ok := claimUsername(claims)
+	if !ok {
+		return "", nil, "Auth token missing username"
+	}
+	return username, claims, ""
+}
+
 func GetAuthStatus() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auto := AutoLoginEnabled()
 		status := AuthStatus{
 			Authenticated:       false,
-			RegistrationEnabled: allowRegistration,
+			RegistrationEnabled: allowRegistration && !auto,
+			AutoLogin:           auto,
 		}
 
-		cookie, err := r.Cookie(AUTH_COOKIE)
-		if err != nil {
-			utils.RespondWithJSON(w, &status, http.StatusOK)
-			return
-		}
-
-		claims, err := extractClaims(cookie.Value)
-		if err != nil {
-			utils.RespondWithJSON(w, &status, http.StatusOK)
-			return
-		}
-
-		username, ok := claimUsername(claims)
-		if !ok {
+		username, claims, _ := userFromCookie(r)
+		if username == "" {
+			if auto && autoLogin(w) != "" {
+				status.Authenticated = true
+			}
 			utils.RespondWithJSON(w, &status, http.StatusOK)
 			return
 		}
