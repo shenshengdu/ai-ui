@@ -65,7 +65,7 @@ export const MARKET_GROUPS: MarketGroup[] = [
   {
     key: "fx",
     items: [
-      { symbol: "CNH=X", name: "美元/离岸人民币" },
+      { symbol: "CNY=X", name: "美元/人民币" },          // 雅虎的 CNH=X（离岸）只给最近 5 天，没有历史日线
       { symbol: "JPY=X", name: "美元/日元" },
       { symbol: "EURUSD=X", name: "欧元/美元" },
     ],
