@@ -42,5 +42,6 @@ describe("pageContext 长度", () => {
     expect([...c].length).toBeLessThan(2000);
     expect(c).toContain("```chart");
     expect(c).toContain("finance_company");
+    expect(c).toContain("web_search");
   });
 });
