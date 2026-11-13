@@ -43,5 +43,8 @@ describe("pageContext 长度", () => {
     expect(c).toContain("```chart");
     expect(c).toContain("finance_company");
     expect(c).toContain("web_search");
+    expect(c).toContain("只聊投资相关");
+    expect(c).toContain("不发布报告");
+    expect(c).toContain("kind=profile");
   });
 });

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Bajahaw/ai-ui/cmd/providers"
+	"github.com/Bajahaw/ai-ui/cmd/tools"
 )
 
 func TestPageContext(t *testing.T) {
@@ -21,5 +22,16 @@ func TestPageContext(t *testing.T) {
 	withPageContext(long, strings.Repeat("长", 5000))
 	if n := strings.Count(long[0].Content, "长"); n != maxPageContext {
 		t.Fatalf("should cap at %d runes, got %d", maxPageContext, n)
+	}
+}
+
+func TestToolsForPage(t *testing.T) {
+	all := []*tools.Tool{{Name: "finance_quote"}, {Name: "publish_report"}, {Name: "web_search"}}
+	if got := toolsForPage(all, ""); len(got) != 3 {
+		t.Fatalf("main chat keeps all tools, got %d", len(got))
+	}
+	got := toolsForPage(all, "K 线页")
+	if len(got) != 2 || got[0].Name != "finance_quote" || got[1].Name != "web_search" {
+		t.Fatalf("page chat must drop publish_report: %+v", got)
 	}
 }
