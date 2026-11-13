@@ -214,6 +214,7 @@ export const zh: Record<MessageKey, string> = {
   "kline.chat.send": "发送",
   "kline.chat.stop": "停止",
   "kline.chat.noModel": "没有可用的模型：请在设置里启用 DeepSeek V4 Flash 或 GPT Luna",
+  "kline.chat.q.deep": "深度研究",
   "kline.chat.q.tech": "技术面分析",
   "kline.chat.q.levels": "支撑位和压力位",
   "kline.chat.q.ann": "最近公告解读",

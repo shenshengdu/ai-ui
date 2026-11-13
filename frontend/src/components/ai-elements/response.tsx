@@ -486,6 +486,10 @@ const components: Options["components"] = {
       return <KlineBlock code={code} className={className} />;
     }
 
+    if (language.toLowerCase() === "chart") {
+      return <ChartActionBlock code={code} className={className} />;
+    }
+
     if (language.toLowerCase() === "svg") {
       return <SvgRenderer code={code} className={cn("w-full", className)} />;
     }
@@ -533,6 +537,39 @@ function KlineBlock({ code, className }: { code: string; className?: string }) {
       📈 {sym}
     </button>
   );
+}
+
+/** K 线页侧边聊天：```chart 是给左边 K 线图的操作，显示成按钮（点了再执行一次）；首页聊天没有这个上下文，按普通代码块显示 */
+export const ChartActionContext = createContext<((code: string) => void) | null>(null);
+export const ChartActionLabel = createContext<((code: string) => string) | null>(null);
+
+function ChartActionBlockInner({ code, onApply, describe }: { code: string; onApply: (code: string) => void; describe: (code: string) => string }) {
+  const text = describe(code);
+  if (!text) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => onApply(code)}
+      title="在左边 K 线图上再画一次"
+      className="my-1 inline-flex max-w-full items-center gap-1 rounded border border-dashed px-2 py-0.5 text-left text-xs text-muted-foreground hover:bg-muted"
+    >
+      🖊 <span className="truncate">{text}</span>
+    </button>
+  );
+}
+
+function ChartActionBlock({ code, className }: { code: string; className?: string }) {
+  const onApply = useContext(ChartActionContext);
+  const describe = useContext(ChartActionLabel);
+  if (!onApply || !describe) {
+    // 首页聊天：当普通代码块
+    return (
+      <CodeBlock className={cn("my-4 h-auto", className)} code={code} language="json">
+        <CodeBlockCopyButton onError={() => console.error("Failed to copy code to clipboard")} />
+      </CodeBlock>
+    );
+  }
+  return <ChartActionBlockInner code={code} onApply={onApply} describe={describe} />;
 }
 
 export const Response = memo(

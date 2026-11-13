@@ -11,6 +11,7 @@ import { ExternalLinkIcon, RotateCcwIcon, Settings2Icon, TriangleAlertIcon } fro
 import { useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState, type HTMLAttributes } from "react";
 import type { Chart, KLineData, YAxisPosition } from "klinecharts";
+import type { ChartAction } from "@/components/kline/chart-actions";
 import { useI18n } from "@/lib/i18n";
 import { getHeaders } from "@/lib/api/headers";
 
@@ -24,6 +25,8 @@ type KlineChartProps = HTMLAttributes<HTMLDivElement> & {
   pageMode?: boolean;
   /** height 是图表总高度（含副图），副图多了主图变矮；K 线页上下分栏时用 */
   fitHeight?: boolean;
+  /** K 线页：AI 发来的图上操作（seq 变了才执行一次；数据到了再执行） */
+  command?: { seq: number; actions: ChartAction[] } | null;
 };
 
 export type Interval = "day" | "week" | "month" | "quarter" | "year";
@@ -219,7 +222,55 @@ export function klineCacheGet(symbol: string, range: Range, now = Date.now()): {
   return null;
 }
 
-export function KlineChart({ code, spec: specProp, height = 320, pageMode = false, fitHeight = false, className, ...props }: KlineChartProps) {
+const AI_GROUP = "ai";
+let aiOverlaysRegistered = false;
+
+/** AI 标注用的两种图形：整宽水平虚线（右端写说明）、半透明时间区间（顶部写说明） */
+function registerAiOverlays(lib: typeof import("klinecharts")) {
+  if (aiOverlaysRegistered) return;
+  aiOverlaysRegistered = true;
+  lib.registerOverlay({
+    name: "aiHLine",
+    totalStep: 2,
+    needDefaultPointFigure: false,
+    needDefaultXAxisFigure: false,
+    needDefaultYAxisFigure: true,
+    createPointFigures: ({ coordinates, bounding, overlay }) => {
+      const ext = (overlay.extendData ?? {}) as { text?: string; color?: string };
+      const y = coordinates[0]?.y ?? 0;
+      const color = ext.color ?? "#8B5CF6";
+      return [
+        { type: "line", attrs: { coordinates: [{ x: 0, y }, { x: bounding.width, y }] },
+          styles: { color, size: 1, style: "dashed", dashedValue: [6, 4] }, ignoreEvent: true },
+        { type: "text", attrs: { x: bounding.width - 6, y: y - 3, text: ext.text ?? "", align: "right", baseline: "bottom" },
+          styles: { color, size: 12, backgroundColor: "transparent", borderSize: 0, paddingLeft: 0, paddingRight: 0, paddingTop: 0, paddingBottom: 0 },
+          ignoreEvent: true },
+      ];
+    },
+  });
+  lib.registerOverlay({
+    name: "aiRange",
+    totalStep: 3,
+    needDefaultPointFigure: false,
+    needDefaultXAxisFigure: false,
+    needDefaultYAxisFigure: false,
+    createPointFigures: ({ coordinates, bounding, overlay }) => {
+      if (coordinates.length < 2) return [];
+      const ext = (overlay.extendData ?? {}) as { text?: string };
+      const x1 = Math.min(coordinates[0].x, coordinates[1].x);
+      const w = Math.max(2, Math.abs(coordinates[1].x - coordinates[0].x));
+      return [
+        { type: "rect", attrs: { x: x1, y: 0, width: w, height: bounding.height },
+          styles: { style: "fill", color: "rgba(139, 92, 246, 0.10)" }, ignoreEvent: true },
+        { type: "text", attrs: { x: x1 + 4, y: 4, text: ext.text ?? "", align: "left", baseline: "top" },
+          styles: { color: "#8B5CF6", size: 12, backgroundColor: "transparent", borderSize: 0, paddingLeft: 0, paddingRight: 0, paddingTop: 0, paddingBottom: 0 },
+          ignoreEvent: true },
+      ];
+    },
+  });
+}
+
+export function KlineChart({ code, spec: specProp, height = 320, pageMode = false, fitHeight = false, command, className, ...props }: KlineChartProps) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const specPropKey = specProp ? JSON.stringify(specProp) : "";
@@ -295,6 +346,7 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
     import("klinecharts").then((lib) => {
       if (disposed || !boxRef.current) return;
       libRef.current = lib;
+      registerAiOverlays(lib);
       const chart = lib.init(boxRef.current, { timezone: "UTC", locale: "zh-CN" });
       chartRef.current = chart;
       chart?.setPriceVolumePrecision(2, 0);
@@ -370,6 +422,40 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shown, version, paramsKey]);
+
+  // AI 的图上操作：画线、标区间、切周期、开关指标、清除（换股票由 K 线页处理）
+  const appliedSeq = useRef<number | null>(null);
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart || !bars?.length || !command || appliedSeq.current === command.seq) return;
+    appliedSeq.current = command.seq;
+    const lastTs = Date.parse(bars[bars.length - 1].t + "T00:00:00Z");
+    for (const a of command.actions) {
+      if (a.type === "clear") chart.removeOverlay({ groupId: AI_GROUP });
+      else if (a.type === "interval") setIntervalKind(a.value);
+      else if (a.type === "indicators")
+        setIndicators((cur) => {
+          const next = cur.filter((x) => !(a.remove ?? []).includes(x));
+          for (const x of a.add ?? []) if (!next.includes(x)) next.push(x);
+          return next;
+        });
+      else if (a.type === "hline") {
+        const color = a.kind === "support" ? "#2563EB" : a.kind === "resistance" ? "#F59E0B" : "#8B5CF6";
+        chart.createOverlay(
+          { name: "aiHLine", groupId: AI_GROUP, lock: true, points: [{ timestamp: lastTs, value: a.price }],
+            extendData: { text: a.label || String(a.price), color } },
+          "candle_pane",
+        );
+      } else if (a.type === "range") {
+        chart.createOverlay(
+          { name: "aiRange", groupId: AI_GROUP, lock: true,
+            points: [{ timestamp: Date.parse(a.from + "T00:00:00Z"), value: 0 }, { timestamp: Date.parse(a.to + "T00:00:00Z"), value: 0 }],
+            extendData: { text: a.label || "" } },
+          "candle_pane",
+        );
+      }
+    }
+  }, [command, bars, version]);
 
   if (!spec) {
     return (

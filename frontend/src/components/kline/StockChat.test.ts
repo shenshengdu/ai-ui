@@ -35,3 +35,12 @@ describe("StockChat helpers", () => {
     expect(c).toContain("不要输出 ```kline");
   });
 });
+
+describe("pageContext 长度", () => {
+  it("后端最多收 2000 字", () => {
+    const c = pageContext("600519.SH", "贵州茅台");
+    expect([...c].length).toBeLessThan(2000);
+    expect(c).toContain("```chart");
+    expect(c).toContain("finance_company");
+  });
+});
