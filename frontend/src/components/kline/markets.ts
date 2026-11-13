@@ -83,3 +83,18 @@ export const MARKET_GROUPS: MarketGroup[] = [
 export const MARKET_NAME: Record<string, string> = Object.fromEntries(
   MARKET_GROUPS.flatMap((g) => g.items.map((i) => [i.symbol, i.name])),
 );
+
+export const ALL_MARKET_SYMBOLS: string[] = MARKET_GROUPS.flatMap((g) => g.items.map((i) => i.symbol));
+
+export type MarketQuote = { symbol: string; price: number; change?: number | null; change_percent?: number | null; time?: string | null };
+
+/** 价格显示：收益率、汇率、小于 100 的多给几位 */
+export function fmtQuotePrice(symbol: string, p: number): string {
+  if (symbol.startsWith("^") && /^\^(TNX|FVX|IRX|TYX)$/.test(symbol)) return `${p.toFixed(3)}%`;
+  if (symbol.endsWith("=X")) return p.toFixed(4);
+  return p >= 1000 ? p.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 }) : p.toFixed(2);
+}
+
+export function fmtQuotePct(pct?: number | null): string {
+  return pct == null || !Number.isFinite(pct) ? "" : `${pct > 0 ? "+" : ""}${pct.toFixed(2)}%`;
+}
