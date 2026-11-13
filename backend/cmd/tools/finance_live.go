@@ -261,7 +261,7 @@ func liveTencent(ctx context.Context, key string, hk bool) (*liveQuote, error) {
 		return nil, fmt.Errorf("腾讯没有行情时间")
 	}
 	vol := pf(p[6])
-	if !hk {
+	if !hk && !strings.HasPrefix(key, "sh688") && !strings.HasPrefix(key, "sh689") { // 手 → 股；科创板腾讯给的就是股
 		vol *= 100
 	}
 	return &liveQuote{date: t[:4] + "-" + t[4:6] + "-" + t[6:8], clock: t[8:10] + ":" + t[10:12] + ":" + t[12:14],
