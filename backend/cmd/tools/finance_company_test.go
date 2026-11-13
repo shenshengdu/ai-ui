@@ -17,7 +17,7 @@ func TestFinanceCompanyProxy(t *testing.T) {
 		case "/api/v1/company/600519.SH/announcements":
 			_, _ = w.Write([]byte(`{"status":"success","announcements":[{"title":"2026年第三季度报告","url":"http://static.cninfo.com.cn/x.PDF"}]}`))
 		case "/api/v1/company/AAPL/financials":
-			if r.URL.Query().Get("limit") != "12" {
+			if r.URL.Query().Get("limit") != "40" {
 				http.Error(w, "limit", http.StatusBadRequest)
 				return
 			}

@@ -21,7 +21,7 @@ func financeCompany(w http.ResponseWriter, r *http.Request) {
 	switch kind {
 	case "announcements":
 	case "financials":
-		limit = "12"
+		limit = "40" // 最多 40 期；前端只显示最近 5 年（A 股 20 个季度，港股 10 个半年）
 	default:
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(`{"status":"error","error":"kind 只能是 announcements 或 financials"}`))

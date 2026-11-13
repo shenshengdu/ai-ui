@@ -74,6 +74,14 @@ export function periodLabel(p: string | null | undefined, zh: boolean): string {
   return PERIOD_EN[p] ?? p;
 }
 
+/** 主要财务只显示最近几年（后端最多给 40 期） */
+export const FIN_YEARS = 5;
+
+export function recentYears<T extends { report_date: string }>(rows: T[], years: number, today = new Date()): T[] {
+  const cut = `${today.getFullYear() - years}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  return rows.filter((r) => r.report_date > cut);
+}
+
 export function fmtPct(v: number | null | undefined): string {
   return v == null || !Number.isFinite(v) ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(2)}%`;
 }
@@ -153,7 +161,7 @@ function FinTable({ symbol }: { symbol: string }) {
   const st = useCompany(symbol, "financials");
   if (st.loading) return <p className="py-4 text-sm text-muted-foreground">{t("kline.loading")}</p>;
   if (st.error) return <p className="py-4 text-sm text-destructive">{t("kline.loadFailed")}：{st.error}</p>;
-  const rows = st.rows as FinRow[];
+  const rows = recentYears(st.rows as FinRow[], FIN_YEARS);
   if (rows.length === 0) return <p className="py-4 text-sm text-muted-foreground">{t("kline.noFin")}</p>;
   const cur = rows.find((r) => r.currency)?.currency;
   const yoyCls = (v?: number | null) => (v == null ? "" : v > 0 ? "text-red-600 dark:text-red-400" : v < 0 ? "text-green-600 dark:text-green-400" : "");
