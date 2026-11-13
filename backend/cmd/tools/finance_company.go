@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/url"
@@ -30,6 +31,12 @@ func financeCompany(w http.ResponseWriter, r *http.Request) {
 	if !klineSymbolRe.MatchString(symbol) || strings.ContainsAny(symbol, "^=") {
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(`{"status":"error","error":"代码格式：美股 AAPL、A 股 600519.SH、港股 0700.HK"}`))
+		return
+	}
+	// 缓存：财务一小时、公告十分钟（每晚才更新）；后台还在补历史公告的不缓存，前端过一会儿会再取
+	cacheKey := "company|" + symbol + "|" + kind
+	if c, ok := klineCacheGet(cacheKey); ok {
+		klineWrite(w, r, c, true)
 		return
 	}
 	base := strings.TrimRight(strings.TrimSpace(os.Getenv("FINANCE_BASE_URL")), "/")
@@ -62,6 +69,20 @@ func financeCompany(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"status":"error","error":"金融平台查询失败"}`))
 		return
 	}
-	w.Header().Set("Cache-Control", "private, max-age=600")
-	_, _ = w.Write(body)
+	var meta struct {
+		Backfilling bool `json:"backfilling"`
+	}
+	_ = json.Unmarshal(body, &meta)
+	c := gzipCached(body)
+	if meta.Backfilling {
+		w.Header().Set("Cache-Control", "no-store")
+	} else {
+		c.ttl = 10 * time.Minute
+		if kind == "financials" {
+			c.ttl = time.Hour
+		}
+		klineCachePut(cacheKey, c)
+		w.Header().Set("Cache-Control", "private, max-age=600")
+	}
+	klineWrite(w, r, c, false)
 }

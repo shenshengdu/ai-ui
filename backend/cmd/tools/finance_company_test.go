@@ -47,3 +47,36 @@ func TestFinanceCompanyProxy(t *testing.T) {
 		}
 	}
 }
+
+func TestFinanceCompanyCache(t *testing.T) {
+	calls := map[string]int{}
+	platform := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls[r.URL.Path]++
+		if strings.HasSuffix(r.URL.Path, "/announcements") && strings.Contains(r.URL.Path, "600000") {
+			_, _ = w.Write([]byte(`{"status":"success","backfilling":true,"announcements":[]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"status":"success","backfilling":false,"rows":[{"report_date":"2026-09-30"}]}`))
+	}))
+	defer platform.Close()
+	t.Setenv("FINANCE_BASE_URL", platform.URL)
+	t.Setenv("FINANCE_API_KEY", "k")
+	klineCacheMu.Lock()
+	klineCache = map[string]klineCached{}
+	klineCacheMu.Unlock()
+	get := func(q string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		financeCompany(rec, httptest.NewRequest(http.MethodGet, "/finance/company?"+q, nil))
+		return rec
+	}
+	get("symbol=600519.SH&kind=financials")
+	rec := get("symbol=600519.SH&kind=financials")
+	if calls["/api/v1/company/600519.SH/financials"] != 1 || rec.Header().Get("X-Kline-Cache") != "hit" || !strings.Contains(rec.Body.String(), "2026-09-30") {
+		t.Fatalf("financials should be cached: %v %v", calls, rec.Header())
+	}
+	get("symbol=600000.SH&kind=announcements")
+	rec = get("symbol=600000.SH&kind=announcements")
+	if calls["/api/v1/company/600000.SH/announcements"] != 2 || rec.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("backfilling must not be cached: %v %v", calls, rec.Header())
+	}
+}

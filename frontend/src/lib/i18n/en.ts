@@ -206,7 +206,7 @@ export const en = {
   "kline.dragResize": "Drag to resize chart and panel",
   "kline.tab.announcements": "Filings",
   "kline.tab.financials": "Key financials",
-  "kline.loadingAnn": "Loading… (first lookup backfills 3 years of filings, may take ~30s)",
+  "kline.loadingAnn": "Loading…",
   "kline.noAnn": "No filings",
   "kline.noFin": "No financial data",
   "kline.loadFailed": "Failed to load",
