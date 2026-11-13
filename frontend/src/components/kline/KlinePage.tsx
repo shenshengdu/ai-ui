@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeftIcon, CandlestickChartIcon, GlobeIcon, SearchIcon } from "lucide-react";
-import { MARKET_GROUPS, MARKET_NAME } from "./markets";
+import { ALL_MARKET_SYMBOLS, MARKET_GROUPS, MARKET_NAME, fmtQuotePct, fmtQuotePrice, type MarketQuote } from "./markets";
 import { CompanyPanel, hasCompanyData } from "./CompanyPanel";
 import { INTERVALS, KlineChart, type Interval, type KlineSpec } from "@/components/ai-elements/kline-chart";
 import { getHeaders } from "@/lib/api/headers";
@@ -117,6 +117,33 @@ function SplitView({ chart, panel }: { chart: (h: number) => ReactNode; panel: R
   );
 }
 
+/** 面板打开时取所有指数的最新价和涨跌，每分钟刷新 */
+function useMarketQuotes(open: boolean): Record<string, MarketQuote> {
+  const [q, setQ] = useState<Record<string, MarketQuote>>({});
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const load = () =>
+      fetch(`/api/tools/finance/markets?symbols=${encodeURIComponent(ALL_MARKET_SYMBOLS.join(","))}`, {
+        headers: getHeaders(),
+        credentials: "include",
+      })
+        .then((r) => r.json().catch(() => ({})))
+        .then((d) => {
+          if (cancelled || !Array.isArray(d?.quotes)) return;
+          setQ((old) => ({ ...old, ...Object.fromEntries((d.quotes as MarketQuote[]).map((x) => [x.symbol, x])) }));
+        })
+        .catch(() => {});
+    load();
+    const timer = setInterval(load, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [open]);
+  return q;
+}
+
 export function KlinePage() {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -190,6 +217,7 @@ export function KlinePage() {
       : hits.find((h) => h.symbol === symbol) ?? (MARKET_NAME[symbol] ? { symbol, name: MARKET_NAME[symbol] } : undefined);
   const [showMarkets, setShowMarkets] = useState(false);
   const marketsOpen = showMarkets || !spec;
+  const quotes = useMarketQuotes(marketsOpen);
 
   return (
     <div className="flex h-dvh flex-col bg-background text-foreground">
@@ -274,10 +302,27 @@ export function KlinePage() {
                     pick({ symbol: it.symbol, name: it.name });
                     setShowMarkets(false);
                   }}
-                  className={cn("rounded border px-2 py-0.5 text-xs hover:bg-muted", it.symbol === symbol && "bg-primary text-primary-foreground")}
-                  title={it.symbol}
+                  className={cn(
+                    "flex items-baseline gap-1.5 rounded border px-2 py-0.5 text-xs hover:bg-muted",
+                    it.symbol === symbol && "bg-primary text-primary-foreground",
+                  )}
+                  title={quotes[it.symbol]?.time ? `${it.symbol} · ${quotes[it.symbol]?.time}` : it.symbol}
                 >
-                  {it.name}
+                  <span>{it.name}</span>
+                  {quotes[it.symbol] && (
+                    <>
+                      <span className="font-mono tabular-nums">{fmtQuotePrice(it.symbol, quotes[it.symbol].price)}</span>
+                      <span
+                        className={cn(
+                          "font-mono tabular-nums",
+                          it.symbol !== symbol && (quotes[it.symbol].change_percent ?? 0) > 0 && "text-[#F92855]",
+                          it.symbol !== symbol && (quotes[it.symbol].change_percent ?? 0) < 0 && "text-[#2DC08E]",
+                        )}
+                      >
+                        {fmtQuotePct(quotes[it.symbol].change_percent)}
+                      </span>
+                    </>
+                  )}
                 </button>
               ))}
             </div>
