@@ -188,7 +188,7 @@ func chatStream(w http.ResponseWriter, r *http.Request) {
 		User:            user,
 		MessageID:       responseMessage.ID,
 		Context:         genCtx,
-		Tools:           toOpenAITools(tools.GetAvailableTools(user)),
+		Tools:           toOpenAITools(toolsForPage(tools.GetAvailableTools(user), req.PageContext)),
 	}
 
 	var calls []providers.ToolCall

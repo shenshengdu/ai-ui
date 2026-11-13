@@ -4,7 +4,25 @@ import (
 	"strings"
 
 	"github.com/Bajahaw/ai-ui/cmd/providers"
+	"github.com/Bajahaw/ai-ui/cmd/tools"
 )
+
+// 带页面背景的对话（K 线页聊天框）不给的工具：不在那里发布报告
+var pageBlockedTools = map[string]bool{"publish_report": true}
+
+// toolsForPage 去掉页面聊天不该用的工具；没有页面背景（首页聊天）原样返回
+func toolsForPage(all []*tools.Tool, pageContext string) []*tools.Tool {
+	if strings.TrimSpace(pageContext) == "" {
+		return all
+	}
+	out := make([]*tools.Tool, 0, len(all))
+	for _, t := range all {
+		if !pageBlockedTools[t.Name] {
+			out = append(out, t)
+		}
+	}
+	return out
+}
 
 const maxPageContext = 2000
 
