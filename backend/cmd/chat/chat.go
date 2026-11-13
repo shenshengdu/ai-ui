@@ -19,6 +19,8 @@ type Request struct {
 	Content         string   `json:"content"`
 	WebSearch       bool     `json:"webSearch,omitempty"`
 	AttachedFileIDs []string `json:"attachedFileIds,omitempty"`
+	// PageContext：页面给这一轮的背景（K 线页：在看哪只股票、周期、最新价），只放进这次的系统提示，不存进对话
+	PageContext string `json:"pageContext,omitempty"`
 }
 
 type Retry struct {
@@ -176,6 +178,7 @@ func chatStream(w http.ResponseWriter, r *http.Request) {
 
 	// Build context from user message
 	ctx := buildContext(convID, userMessage.ID, user)
+	withPageContext(ctx, req.PageContext)
 	reasoningSetting, _ := settings.Get("reasoningEffort", user)
 
 	providerParams := providers.RequestParams{

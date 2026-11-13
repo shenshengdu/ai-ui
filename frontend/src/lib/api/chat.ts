@@ -33,6 +33,7 @@ export class ChatAPI {
     onError?: (error: string) => void,
     sessionId?: string,
     signal?: AbortSignal,
+    pageContext?: string,
   ): Promise<void> {
     if (!model) {
       throw new Error("Valid model is required");
@@ -49,6 +50,7 @@ export class ChatAPI {
       content,
       webSearch,
       attachedFileIds,
+      ...(pageContext ? { pageContext } : {}),
     };
 
     try {

@@ -7,7 +7,7 @@ import { SvgRenderer } from "./svg-renderer.tsx";
 import { WidgetRenderer } from "./widget-renderer.tsx";
 import { FileCard } from "./file-card.tsx";
 import type { HTMLAttributes } from "react";
-import { memo } from "react";
+import { createContext, memo, useContext } from "react";
 import ReactMarkdown, { type Options } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import { harden, type BlockPolicyType } from "rehype-harden";
@@ -483,7 +483,7 @@ const components: Options["components"] = {
     }
 
     if (language.toLowerCase() === "kline") {
-      return <KlineChart code={code} className={cn("w-full", className)} />;
+      return <KlineBlock code={code} className={className} />;
     }
 
     if (language.toLowerCase() === "svg") {
@@ -509,6 +509,31 @@ const components: Options["components"] = {
     );
   },
 };
+
+/** K 线页侧边聊天：代码块不画图，换成一个按钮（点了在左边大图上看）。首页聊天没有这个上下文，照常画图 */
+export const KlineInlineContext = createContext<((spec: unknown) => void) | null>(null);
+
+function KlineBlock({ code, className }: { code: string; className?: string }) {
+  const onOpen = useContext(KlineInlineContext);
+  if (!onOpen) return <KlineChart code={code} className={cn("w-full", className)} />;
+  let spec: Record<string, unknown> | null = null;
+  try {
+    spec = JSON.parse(code);
+  } catch {
+    spec = null;
+  }
+  const sym = spec && typeof spec.symbol === "string" ? spec.symbol : null;
+  if (!sym) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(spec)}
+      className="my-1 inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted"
+    >
+      📈 {sym}
+    </button>
+  );
+}
 
 export const Response = memo(
   ({

@@ -7,7 +7,8 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeftIcon, CandlestickChartIcon, GlobeIcon, SearchIcon } from "lucide-react";
+import { ArrowLeftIcon, CandlestickChartIcon, GlobeIcon, MessageSquareIcon, SearchIcon } from "lucide-react";
+import { StockChat } from "./StockChat";
 import { ALL_MARKET_SYMBOLS, MARKET_GROUPS, MARKET_NAME, fmtQuotePct, fmtQuotePrice, type MarketQuote } from "./markets";
 import { CompanyPanel, hasCompanyData } from "./CompanyPanel";
 import { INTERVALS, KlineChart, type Interval, type KlineSpec } from "@/components/ai-elements/kline-chart";
@@ -144,6 +145,68 @@ function useMarketQuotes(open: boolean): Record<string, MarketQuote> {
   return q;
 }
 
+const CHAT_OPEN_KEY = "kline.chatOpen";
+const CHAT_W_KEY = "kline.chatWidth";
+
+function readLS(k: string): string | null {
+  try {
+    return localStorage.getItem(k);
+  } catch {
+    return null;
+  }
+}
+function writeLS(k: string, v: string) {
+  try {
+    localStorage.setItem(k, v);
+  } catch {
+    /* 本机存不了就算了 */
+  }
+}
+
+function useIsNarrow() {
+  const q = "(max-width: 767px)";
+  const [n, setN] = useState(() => typeof window !== "undefined" && window.matchMedia?.(q).matches);
+  useEffect(() => {
+    const m = window.matchMedia?.(q);
+    if (!m) return;
+    const on = () => setN(m.matches);
+    m.addEventListener("change", on);
+    return () => m.removeEventListener("change", on);
+  }, []);
+  return n;
+}
+
+/** 右侧聊天框和图之间的竖向拖动条 */
+function ChatResizer({ width, setWidth }: { width: number; setWidth: (w: number) => void }) {
+  const { t } = useI18n();
+  const drag = useRef<{ x: number; w: number } | null>(null);
+  const clamp = (w: number) => Math.round(Math.max(300, Math.min(w, window.innerWidth * 0.6)));
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={t("kline.dragResize")}
+      tabIndex={0}
+      onPointerDown={(e) => {
+        drag.current = { x: e.clientX, w: width };
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      }}
+      onPointerMove={(e) => drag.current && setWidth(clamp(drag.current.w - (e.clientX - drag.current.x)))}
+      onPointerUp={() => {
+        drag.current = null;
+        writeLS(CHAT_W_KEY, String(width));
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "ArrowLeft") setWidth(clamp(width + 40));
+        else if (e.key === "ArrowRight") setWidth(clamp(width - 40));
+      }}
+      className="group flex w-2 shrink-0 cursor-col-resize touch-none items-center justify-center"
+    >
+      <div className="h-12 w-1 rounded-full bg-border group-hover:bg-muted-foreground/50" />
+    </div>
+  );
+}
+
 export function KlinePage() {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -217,6 +280,14 @@ export function KlinePage() {
       : hits.find((h) => h.symbol === symbol) ?? (MARKET_NAME[symbol] ? { symbol, name: MARKET_NAME[symbol] } : undefined);
   const [showMarkets, setShowMarkets] = useState(false);
   const marketsOpen = showMarkets || !spec;
+  const narrow = useIsNarrow();
+  const [chatOpen, setChatOpen] = useState(() => readLS(CHAT_OPEN_KEY) !== "0" && !(typeof window !== "undefined" && window.innerWidth < 768));
+  const [chatW, setChatW] = useState(() => Math.max(300, Number(readLS(CHAT_W_KEY)) || 400));
+  const toggleChat = () =>
+    setChatOpen((v) => {
+      if (!narrow) writeLS(CHAT_OPEN_KEY, v ? "0" : "1");
+      return !v;
+    });
   const quotes = useMarketQuotes(marketsOpen);
 
   return (
@@ -288,6 +359,17 @@ export function KlinePage() {
           <GlobeIcon className="size-4" />
           <span className="hidden sm:inline">{t("kline.markets")}</span>
         </button>
+        {spec && (
+          <button
+            type="button"
+            onClick={toggleChat}
+            className={cn("flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-muted", chatOpen && "bg-muted")}
+            title={t("kline.chat.toggle")}
+          >
+            <MessageSquareIcon className="size-4" />
+            <span className="hidden sm:inline">{t("kline.chat.toggle")}</span>
+          </button>
+        )}
       </header>
       {marketsOpen && (
         <div className="shrink-0 space-y-1.5 border-b px-3 py-2 text-sm">
@@ -329,7 +411,8 @@ export function KlinePage() {
           ))}
         </div>
       )}
-      <main className={cn("min-h-0 flex-1 px-3 py-2", spec && hasCompanyData(spec.symbol) ? "flex flex-col" : "overflow-auto")}>
+      <div className="flex min-h-0 flex-1">
+      <main className={cn("min-h-0 min-w-0 flex-1 px-3 py-2", spec && hasCompanyData(spec.symbol) ? "flex flex-col" : "overflow-auto")}>
         {spec ? (
           <>
             {current?.name && <div className="shrink-0 px-1 pb-1 text-sm text-muted-foreground">{current.name}</div>}
@@ -355,6 +438,21 @@ export function KlinePage() {
           </div>
         )}
       </main>
+      {spec && chatOpen && !narrow && (
+        <>
+          <ChatResizer width={chatW} setWidth={setChatW} />
+          <aside style={{ width: chatW }} className="min-h-0 shrink-0 border-l">
+            <StockChat symbol={spec.symbol} name={current?.name} onShowSymbol={(sym) => pick({ symbol: sym })} />
+          </aside>
+        </>
+      )}
+      </div>
+      {/* 手机：从底部拉起 */}
+      {spec && chatOpen && narrow && (
+        <div className="fixed inset-x-0 bottom-0 z-30 flex h-[72dvh] flex-col rounded-t-xl border-t bg-background shadow-2xl">
+          <StockChat symbol={spec.symbol} name={current?.name} onShowSymbol={(sym) => pick({ symbol: sym })} onClose={toggleChat} />
+        </div>
+      )}
     </div>
   );
 }
