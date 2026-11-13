@@ -191,6 +191,8 @@ export const zh: Record<MessageKey, string> = {
   "kline.day": "日K",
   "kline.week": "周K",
   "kline.month": "月K",
+  "kline.quarter": "季K",
+  "kline.year": "年K",
   "kline.loading": "加载中…",
   "kline.error": "K 线数据取不到",
   "kline.badSpec": "K 线图参数不对（需要股票代码）",

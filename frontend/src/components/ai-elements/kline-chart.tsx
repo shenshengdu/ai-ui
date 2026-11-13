@@ -26,7 +26,8 @@ type KlineChartProps = HTMLAttributes<HTMLDivElement> & {
   fitHeight?: boolean;
 };
 
-export type Interval = "day" | "week" | "month";
+export type Interval = "day" | "week" | "month" | "quarter" | "year";
+export const INTERVALS: Interval[] = ["day", "week", "month", "quarter", "year"];
 export const RANGES = ["3mo", "6mo", "1y", "2y", "5y", "max"] as const;
 export type Range = (typeof RANGES)[number];
 export const MAIN_INDICATORS = ["MA", "EMA", "BOLL"] as const;
@@ -57,7 +58,7 @@ export function parseSpec(code: unknown): KlineSpec | null {
   const symbol = String(raw?.symbol ?? "").trim().toUpperCase();
   if (!/^[\^A-Z0-9.\-=]{1,15}$/.test(symbol)) return null;
   const period = (RANGES as readonly string[]).includes(String(raw.period)) ? (raw.period as Range) : "1y";
-  const interval = ["day", "week", "month"].includes(String(raw.interval)) ? (raw.interval as Interval) : "day";
+  const interval = (INTERVALS as string[]).includes(String(raw.interval)) ? (raw.interval as Interval) : "day";
   const ind = Array.isArray(raw.indicators)
     ? raw.indicators.map((x) => String(x).toUpperCase()).filter((x) => ALL_INDICATORS.includes(x))
     : [];
@@ -110,7 +111,7 @@ function saveParams(p: Record<string, number[]>) {
 
 type Bar = { t: string; o: number | null; h: number | null; l: number | null; c: number | null; v: number | null };
 
-/** 日 K → 日 / 周（周一开始）/ 月 K */
+/** 日 K → 日 / 周（周一开始）/ 月 / 季 / 年 K */
 export function aggregate(bars: Bar[], interval: Interval): KLineData[] {
   const day: KLineData[] = bars
     .filter((b) => b.c != null)
@@ -129,6 +130,8 @@ export function aggregate(bars: Bar[], interval: Interval): KLineData[] {
   if (interval === "day") return day;
   const key = (ts: number) => {
     const d = new Date(ts);
+    if (interval === "year") return String(d.getUTCFullYear());
+    if (interval === "quarter") return `${d.getUTCFullYear()}-Q${Math.floor(d.getUTCMonth() / 3)}`;
     if (interval === "month") return `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
     const monday = ts - ((d.getUTCDay() + 6) % 7) * 86400000;
     return String(monday);
@@ -384,19 +387,22 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-2 py-1.5">
         <span className="text-sm font-medium">{spec.symbol}</span>
         <div className="flex gap-0.5">
-          {(["day", "week", "month"] as Interval[]).map((iv) => (
+          {INTERVALS.map((iv) => (
             <Toggle key={iv} active={interval === iv} onClick={() => setIntervalKind(iv)}>
               {t(`kline.${iv}` as "kline.day")}
             </Toggle>
           ))}
         </div>
-        <div className="flex gap-0.5">
-          {RANGES.map((r) => (
-            <Toggle key={r} active={range === r} onClick={() => setRange(r)}>
-              {RANGE_LABEL[r]}
-            </Toggle>
-          ))}
-        </div>
+        {/* K 线页一律显示全部历史（不选范围）；对话里的小图保留范围按钮 */}
+        {!pageMode && (
+          <div className="flex gap-0.5">
+            {RANGES.map((r) => (
+              <Toggle key={r} active={range === r} onClick={() => setRange(r)}>
+                {RANGE_LABEL[r]}
+              </Toggle>
+            ))}
+          </div>
+        )}
         <div className="flex gap-0.5">
           {MAIN_INDICATORS.map((n) => (
             <Toggle key={n} active={indicators.includes(n)} onClick={() => toggle(n)}>
