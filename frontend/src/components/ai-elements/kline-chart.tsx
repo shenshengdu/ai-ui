@@ -22,6 +22,8 @@ type KlineChartProps = HTMLAttributes<HTMLDivElement> & {
   height?: number;
   /** K 线页：不显示「在 K 线页打开」按钮 */
   pageMode?: boolean;
+  /** height 是图表总高度（含副图），副图多了主图变矮；K 线页上下分栏时用 */
+  fitHeight?: boolean;
 };
 
 export type Interval = "day" | "week" | "month";
@@ -188,7 +190,7 @@ function Toggle({ active, onClick, children }: { active: boolean; onClick: () =>
   );
 }
 
-export function KlineChart({ code, spec: specProp, height = 320, pageMode = false, className, ...props }: KlineChartProps) {
+export function KlineChart({ code, spec: specProp, height = 320, pageMode = false, fitHeight = false, className, ...props }: KlineChartProps) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const specPropKey = specProp ? JSON.stringify(specProp) : "";
@@ -422,7 +424,7 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
           <TriangleAlertIcon className="size-4" /> {t("kline.error")}：{error}
         </div>
       )}
-      <div ref={boxRef} style={{ height: height + subCount * 80 }} className="w-full" />
+      <div ref={boxRef} style={{ height: fitHeight ? Math.max(height, 140 + subCount * 80) : height + subCount * 80 }} className="w-full" />
       {source && <div className="px-2 pb-1 text-right text-[11px] text-muted-foreground">{t("kline.source")}：{source}</div>}
     </div>
   );
