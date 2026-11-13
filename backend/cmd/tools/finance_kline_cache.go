@@ -18,6 +18,7 @@ const klineCacheMax = 128
 type klineCached struct {
 	body, gz []byte
 	at       time.Time
+	ttl      time.Duration // 0 = klineCacheTTL
 }
 
 var (
@@ -29,7 +30,11 @@ func klineCacheGet(key string) (klineCached, bool) {
 	klineCacheMu.Lock()
 	defer klineCacheMu.Unlock()
 	c, ok := klineCache[key]
-	if !ok || time.Since(c.at) > klineCacheTTL {
+	ttl := c.ttl
+	if ttl == 0 {
+		ttl = klineCacheTTL
+	}
+	if !ok || time.Since(c.at) > ttl {
 		return klineCached{}, false
 	}
 	return c, true
@@ -52,6 +57,11 @@ func klineCachePut(key string, c klineCached) {
 
 func klineEncode(v klineResp) klineCached {
 	body, _ := json.Marshal(v)
+	return gzipCached(body)
+}
+
+// gzipCached 存 JSON 原文和 gzip 两份
+func gzipCached(body []byte) klineCached {
 	var buf bytes.Buffer
 	zw, _ := gzip.NewWriterLevel(&buf, gzip.BestSpeed)
 	_, _ = zw.Write(body)
@@ -61,7 +71,9 @@ func klineEncode(v klineResp) klineCached {
 
 func klineWrite(w http.ResponseWriter, r *http.Request, c klineCached, hit bool) {
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "private, max-age=300")
+	if w.Header().Get("Cache-Control") == "" {
+		w.Header().Set("Cache-Control", "private, max-age=300")
+	}
 	w.Header().Set("Vary", "Accept-Encoding")
 	if hit {
 		w.Header().Set("X-Kline-Cache", "hit")

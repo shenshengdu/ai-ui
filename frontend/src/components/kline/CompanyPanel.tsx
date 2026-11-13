@@ -90,25 +90,62 @@ function fmtNum(v: number | null | undefined, d = 2): string {
   return v == null || !Number.isFinite(v) ? "—" : v.toFixed(d);
 }
 
+type Loaded = { rows: unknown[]; note?: string | null; source?: string; backfilling: boolean; at: number };
+
+// 浏览器缓存（10 分钟）+ 同一请求只发一次：两个标签一打开就并行取，切换标签、来回切股票不再等
+const COMPANY_TTL = 10 * 60 * 1000;
+const companyCache = new Map<string, Loaded>();
+const inflight = new Map<string, Promise<Loaded>>();
+
+export function loadCompany(symbol: string, kind: Kind, fetchImpl: typeof fetch = fetch): Promise<Loaded> {
+  const key = `${symbol}|${kind}`;
+  const hit = companyCache.get(key);
+  if (hit && !hit.backfilling && Date.now() - hit.at < COMPANY_TTL) return Promise.resolve(hit);
+  const running = inflight.get(key);
+  if (running) return running;
+  const p = fetchImpl(`/api/tools/finance/company?symbol=${encodeURIComponent(symbol)}&kind=${kind}`, {
+    headers: getHeaders(),
+    credentials: "include",
+  })
+    .then(async (r) => {
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || d?.status !== "success") throw new Error(d?.error || `HTTP ${r.status}`);
+      const rows = kind === "announcements" ? d.announcements : d.rows;
+      const out: Loaded = { rows: Array.isArray(rows) ? rows : [], note: d.note, source: d.source, backfilling: d.backfilling === true, at: Date.now() };
+      companyCache.set(key, out);
+      if (companyCache.size > 60) companyCache.delete(companyCache.keys().next().value as string);
+      return out;
+    })
+    .finally(() => inflight.delete(key));
+  inflight.set(key, p);
+  return p;
+}
+
+const BACKFILL_POLL_MS = 12000;
+const BACKFILL_POLLS = 8;
+
 function useCompany(symbol: string, kind: Kind): State {
-  const [st, setSt] = useState<State>({ loading: true, rows: [] });
+  const [st, setSt] = useState<State>(() => {
+    const hit = companyCache.get(`${symbol}|${kind}`);
+    return hit ? { loading: false, rows: hit.rows, note: hit.note, source: hit.source } : { loading: true, rows: [] };
+  });
   useEffect(() => {
     let cancelled = false;
-    setSt({ loading: true, rows: [] });
-    fetch(`/api/tools/finance/company?symbol=${encodeURIComponent(symbol)}&kind=${kind}`, { headers: getHeaders(), credentials: "include" })
-      .then(async (r) => {
-        const d = await r.json().catch(() => ({}));
-        if (cancelled) return;
-        if (!r.ok || d?.status !== "success") {
-          setSt({ loading: false, rows: [], error: d?.error || `HTTP ${r.status}` });
-          return;
-        }
-        const rows = kind === "announcements" ? d.announcements : d.rows;
-        setSt({ loading: false, rows: Array.isArray(rows) ? rows : [], note: d.note, source: d.source });
-      })
-      .catch((e) => !cancelled && setSt({ loading: false, rows: [], error: String(e?.message || e) }));
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const run = (polls: number) => {
+      loadCompany(symbol, kind)
+        .then((d) => {
+          if (cancelled) return;
+          setSt({ loading: false, rows: d.rows, note: d.note, source: d.source });
+          // 第一次查这只：后台在补近 3 年公告，先显示已有的，过一会儿自动再取
+          if (d.backfilling && polls > 0) timer = setTimeout(() => run(polls - 1), BACKFILL_POLL_MS);
+        })
+        .catch((e) => !cancelled && setSt({ loading: false, rows: [], error: String(e?.message || e) }));
+    };
+    run(BACKFILL_POLLS);
     return () => {
       cancelled = true;
+      if (timer) clearTimeout(timer);
     };
   }, [symbol, kind]);
   return st;
@@ -214,6 +251,11 @@ function FinTable({ symbol }: { symbol: string }) {
 export function CompanyPanel({ symbol, className }: { symbol: string; className?: string }) {
   const { t } = useI18n();
   const [tab, setTab] = useState<Kind>("announcements");
+  // 两个标签同时开始取：看公告的时候财务已经在路上
+  useEffect(() => {
+    loadCompany(symbol, "announcements").catch(() => {});
+    loadCompany(symbol, "financials").catch(() => {});
+  }, [symbol]);
   const tabs: { key: Kind; label: string; icon: typeof FileTextIcon }[] = [
     { key: "announcements", label: t("kline.tab.announcements"), icon: FileTextIcon },
     { key: "financials", label: t("kline.tab.financials"), icon: TableIcon },

@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { fmtMoney, fmtPct, hasCompanyData, periodLabel, recentYears, safeUrl } from "./CompanyPanel";
+import { describe, expect, it, vi } from "vitest";
+import { fmtMoney, fmtPct, hasCompanyData, loadCompany, periodLabel, recentYears, safeUrl } from "./CompanyPanel";
 
 describe("CompanyPanel helpers", () => {
   it("只有个股有公告和财报", () => {
@@ -30,5 +30,24 @@ describe("CompanyPanel helpers", () => {
   it("只留最近 5 年", () => {
     const rows = ["2026-09-30", "2022-03-31", "2021-12-31", "2021-09-30", "2020-12-31"].map((report_date) => ({ report_date }));
     expect(recentYears(rows, 5, new Date(2026, 10, 13)).map((r) => r.report_date)).toEqual(["2026-09-30", "2022-03-31", "2021-12-31"]);
+  });
+});
+
+describe("loadCompany", () => {
+  const ok = (body: object) => Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+  it("同一请求只发一次，之后用缓存", async () => {
+    const f = vi.fn(() => ok({ status: "success", rows: [{ report_date: "2026-09-30" }] }));
+    const [a, b] = await Promise.all([loadCompany("C1.SH", "financials", f as unknown as typeof fetch),
+      loadCompany("C1.SH", "financials", f as unknown as typeof fetch)]);
+    await loadCompany("C1.SH", "financials", f as unknown as typeof fetch);
+    expect(f).toHaveBeenCalledTimes(1);
+    expect(a.rows).toEqual(b.rows);
+  });
+  it("后台还在补公告的不缓存，下次重新取", async () => {
+    const f = vi.fn(() => ok({ status: "success", backfilling: true, announcements: [] }));
+    const d = await loadCompany("C2.SH", "announcements", f as unknown as typeof fetch);
+    await loadCompany("C2.SH", "announcements", f as unknown as typeof fetch);
+    expect(d.backfilling).toBe(true);
+    expect(f).toHaveBeenCalledTimes(2);
   });
 });
