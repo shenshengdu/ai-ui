@@ -102,11 +102,13 @@ describe("盘中实时这一根", () => {
     expect(mergeLive(bars, null)).toBe(bars);
     expect(mergeLive(bars, { trading: true })).toBe(bars);
   });
-  it("只有 A 股、港股", () => {
+  it("A 股、港股、美股有；指数、期货没有", () => {
     expect(isLiveSymbol("600519.SH")).toBe(true);
     expect(isLiveSymbol("002594.sz")).toBe(true);
     expect(isLiveSymbol("0700.HK")).toBe(true);
-    expect(isLiveSymbol("AAPL")).toBe(false);
+    expect(isLiveSymbol("AAPL")).toBe(true);
+    expect(isLiveSymbol("BRK.B")).toBe(true);
     expect(isLiveSymbol("^N225")).toBe(false);
+    expect(isLiveSymbol("GC=F")).toBe(false);
   });
 });
