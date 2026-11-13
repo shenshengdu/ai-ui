@@ -21,9 +21,11 @@ const MODEL_KEY = "kline.chatModel";
 
 /** 聊天框能用的模型：DeepSeek V4 Flash、GPT Luna（模型列表里有哪个给哪个），DeepSeek 排前面 */
 export function chatModels(models: Model[]): Model[] {
-  const is = (m: Model, k: string) => m.id.toLowerCase().includes(k) || (m.name || "").toLowerCase().includes(k);
-  const flash = models.filter((m) => is(m, "deepseek-v4-flash") || is(m, "deepseek v4 flash"));
-  const luna = models.filter((m) => is(m, "luna"));
+  // 名字写法不一（deepseek-v4-flash、DeepSeek V4 Flash、deepseek-flash、deepseek/deepseek_v4_flash…）：
+  // 去掉空格、横线、下划线、点、斜杠后看有没有 deepseek 和 flash
+  const norm = (m: Model) => `${m.id} ${m.name || ""}`.toLowerCase().replace(/[\s\-_./]/g, "");
+  const flash = models.filter((m) => norm(m).includes("deepseek") && norm(m).includes("flash"));
+  const luna = models.filter((m) => norm(m).includes("luna"));
   return [...flash, ...luna.filter((m) => !flash.includes(m))];
 }
 

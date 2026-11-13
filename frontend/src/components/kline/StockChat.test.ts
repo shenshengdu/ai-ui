@@ -9,6 +9,8 @@ describe("StockChat helpers", () => {
     const got = chatModels([m("p/gpt-6-luna", "GPT-6 Luna"), m("p/deepseek-v4-pro", "DeepSeek V4 Pro"), m("p/deepseek-v4-flash", "DeepSeek V4 Flash"),
       m("p/gpt-5.6-luna", "gpt-5.6-luna"), m("p/claude", "Claude")]);
     expect(got.map((x) => x.id)).toEqual(["p/deepseek-v4-flash", "p/gpt-6-luna", "p/gpt-5.6-luna"]);
+    expect(chatModels([m("x/deepseek-flash", "deepseek-flash"), m("y/DeepSeek_V4_Flash", ""), m("z/deepseek-chat", "DeepSeek Chat")]).map((x) => x.id))
+      .toEqual(["x/deepseek-flash", "y/DeepSeek_V4_Flash"]);
   });
   it("按股票找对话：标题「📈 代码」或「📈 代码 名称」，不会把 600519 当成 6005", () => {
     expect(convTitle("600519.SH", "贵州茅台")).toBe("📈 600519.SH 贵州茅台");
