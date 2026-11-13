@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { ExternalLinkIcon, RotateCcwIcon, Settings2Icon, TriangleAlertIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState, type HTMLAttributes } from "react";
-import type { Chart, KLineData } from "klinecharts";
+import type { Chart, KLineData, YAxisPosition } from "klinecharts";
 import { useI18n } from "@/lib/i18n";
 import { getHeaders } from "@/lib/api/headers";
 
@@ -321,6 +321,7 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
     if (!chart) return;
     chart.setStyles(isDark ? "dark" : "light");
     chart.setStyles({
+      yAxis: { position: "left" as YAxisPosition }, // 价格刻度放左边（K 线页右边是聊天框）
       candle: { bar: { upColor: UP, downColor: DOWN, noChangeColor: "#888888", upBorderColor: UP, downBorderColor: DOWN,
         upWickColor: UP, downWickColor: DOWN } },
       indicator: { bars: [{ upColor: UP + "B3", downColor: DOWN + "B3", noChangeColor: "#888888" }] },

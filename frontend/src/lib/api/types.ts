@@ -85,6 +85,8 @@ export interface ChatRequest {
   content: string;
   webSearch?: boolean;
   attachedFileIds?: string[];
+  /** 页面给这一轮的背景（K 线页聊天框：当前股票），只进这次的系统提示，不存库 */
+  pageContext?: string;
 }
 
 export interface ChatResponse {
