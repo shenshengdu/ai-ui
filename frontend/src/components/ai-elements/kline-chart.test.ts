@@ -71,3 +71,16 @@ describe("klineCache", () => {
     expect(klineCacheGet("OTHER", "1y", now)).toBeNull();
   });
 });
+
+describe("aggregate 季 / 年", () => {
+  it("按自然季度、自然年合并", () => {
+    const b = (t: string, o: number, h: number, l: number, c: number, v: number) => ({ t, o, h, l, c, v });
+    const bars = [b("2025-11-03", 10, 12, 9, 11, 100), b("2025-12-31", 11, 15, 10, 14, 200), b("2026-01-02", 14, 16, 13, 15, 50),
+      b("2026-03-31", 15, 18, 12, 13, 50), b("2026-04-01", 13, 14, 11, 12, 10)];
+    const q = aggregate(bars, "quarter");
+    expect(q.map((x) => [x.open, x.high, x.low, x.close, x.volume])).toEqual([[10, 15, 9, 14, 300], [14, 18, 12, 13, 100], [13, 14, 11, 12, 10]]);
+    const y = aggregate(bars, "year");
+    expect(y.map((x) => [x.open, x.high, x.low, x.close, x.volume])).toEqual([[10, 15, 9, 14, 300], [14, 18, 11, 12, 110]]);
+    expect(parseSpec('{"symbol":"AAPL","interval":"quarter"}')?.interval).toBe("quarter");
+  });
+});

@@ -192,6 +192,8 @@ export const en = {
   "kline.day": "Day",
   "kline.week": "Week",
   "kline.month": "Month",
+  "kline.quarter": "Quarter",
+  "kline.year": "Year",
   "kline.loading": "Loading…",
   "kline.error": "Chart data unavailable",
   "kline.badSpec": "Invalid chart spec (needs a stock symbol)",

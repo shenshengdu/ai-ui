@@ -1,5 +1,5 @@
 /**
- * K 线页 /kline?symbol=600519.SH&period=max&interval=day&indicators=MA,VOL
+ * K 线页 /kline?symbol=600519.SH&interval=day|week|month|quarter|year&indicators=MA,VOL（一律全部历史）
  * 顶部搜索框（代码或名称：美股、A 股、港股），下面整页 K 线图，默认全部历史日 K。
  * 图下面是公司公告（原文链接）和主要财务（CompanyPanel）。
  * 搜索走后端 /api/tools/finance/search，日 K 走 /api/tools/finance/kline（平台 key 只在服务器）。
@@ -10,7 +10,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeftIcon, CandlestickChartIcon, GlobeIcon, SearchIcon } from "lucide-react";
 import { MARKET_GROUPS, MARKET_NAME } from "./markets";
 import { CompanyPanel, hasCompanyData } from "./CompanyPanel";
-import { KlineChart, RANGES, type Interval, type KlineSpec, type Range } from "@/components/ai-elements/kline-chart";
+import { INTERVALS, KlineChart, type Interval, type KlineSpec } from "@/components/ai-elements/kline-chart";
 import { getHeaders } from "@/lib/api/headers";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -126,9 +126,9 @@ export function KlinePage() {
 
   const spec: KlineSpec | null = useMemo(() => {
     if (!/^[\^A-Z0-9.\-=]{1,15}$/.test(symbol)) return null;
-    const period = (RANGES as readonly string[]).includes(params.get("period") || "") ? (params.get("period") as Range) : "max";
-    const iv = params.get("interval");
-    const interval: Interval = iv === "week" || iv === "month" ? iv : "day";
+    const period = "max" as const;            // K 线页一律全部历史
+    const iv = params.get("interval") as Interval | null;
+    const interval: Interval = iv && INTERVALS.includes(iv) ? iv : "day";
     const ind = (params.get("indicators") || "MA,VOL").split(",").map((x) => x.trim().toUpperCase()).filter(Boolean);
     return { symbol, period, interval, indicators: ind };
   }, [symbol, params]);
