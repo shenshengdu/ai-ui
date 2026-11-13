@@ -110,3 +110,55 @@ func TestLiveHKAndPreOpen(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+func TestLiveHKTigerThenTencent(t *testing.T) {
+	tiger := true
+	liveSetup(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/fp/api/v1/markets/hk_live" {
+			if !tiger || r.Header.Get("X-API-Key") != "k" || r.URL.Query().Get("symbols") != "0700.HK" {
+				_, _ = w.Write([]byte(`{"status":"success","quotes":{}}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"status":"success","quotes":{"00700":{"open":400,"high":405,"low":398,"price":403.2,"prev_close":401,"volume":1234567,"time":"2026-11-13 14:29:58","source":"tiger"}}}`))
+			return
+		}
+		f := make([]string, 50)
+		f[3], f[4], f[5], f[6], f[30], f[33], f[34] = "500.5", "498", "499", "1234567", "2026/11/13 14:14:59", "502", "497"
+		_, _ = w.Write([]byte(`v_hk00700="` + strings.Join(f, "~") + `";`))
+	}, bj1430)
+	t.Setenv("FINANCE_BASE_URL", liveTencentURL[:strings.Index(liveTencentURL, "/qt")]+"/fp")
+	t.Setenv("FINANCE_API_KEY", "k")
+	r := liveCall(t, "0700.HK")
+	if r.Source != "老虎" || *r.Bar.C != 403.2 || *r.Bar.V != 1234567 || r.Delayed || !r.Trading {
+		t.Fatalf("%+v", r)
+	}
+	tiger = false
+	liveCacheMu.Lock()
+	liveCache = map[string]struct {
+		r  liveResp
+		at time.Time
+	}{}
+	liveCacheMu.Unlock()
+	r = liveCall(t, "0700.HK")
+	if r.Source != "腾讯" || !r.Delayed || *r.Bar.C != 500.5 {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestLiveUS(t *testing.T) {
+	trading := `true`
+	liveSetup(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/fp/api/v1/markets/us_live" || r.URL.Query().Get("symbols") != "ZZZZ" {
+			http.Error(w, "x", 404)
+			return
+		}
+		_, _ = w.Write([]byte(`{"status":"success","trading":` + trading + `,"quotes":{"ZZZZ":{"date":"2026-11-13","time":"10:37:59","open":118.2,"high":120.5,"low":117.4,"price":120.5,"prev_close":119.1,"volume":null,"source":"alpaca+finnhub"}}}`))
+	}, time.Date(2026, 11, 13, 15, 38, 0, 0, time.UTC))
+	t.Setenv("FINANCE_BASE_URL", liveTencentURL[:strings.Index(liveTencentURL, "/qt")]+"/fp")
+	t.Setenv("FINANCE_API_KEY", "k")
+	r := liveCall(t, "zzzz")
+	if r.Status != "success" || r.Source != "Alpaca+Finnhub" || r.Bar.V != nil || *r.Bar.C != 120.5 || !r.Trading ||
+		r.Time != "2026-11-13 10:37:59" || r.Bar.T != "2026-11-13" {
+		t.Fatalf("%+v", r)
+	}
+}
