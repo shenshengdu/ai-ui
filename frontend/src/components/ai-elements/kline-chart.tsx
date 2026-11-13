@@ -190,6 +190,32 @@ function Toggle({ active, onClick, children }: { active: boolean; onClick: () =>
   );
 }
 
+// 浏览器里的 K 线缓存（10 分钟）：同一只切换范围、来回打开不再请求。
+// 拿过「全部历史」的，其他范围直接从里面截取最近一段。
+const KLINE_TTL = 10 * 60 * 1000;
+const RANGE_DAYS: Record<string, number> = { "3mo": 93, "6mo": 186, "1y": 365, "2y": 730, "5y": 1825 };
+const klineCache = new Map<string, { bars: Bar[]; source: string; at: number }>();
+
+export function klineCachePut(symbol: string, range: Range, bars: Bar[], source: string, now = Date.now()) {
+  klineCache.set(`${symbol}|${range}`, { bars, source, at: now });
+  if (klineCache.size > 40) klineCache.delete(klineCache.keys().next().value as string);
+}
+
+export function klineCacheGet(symbol: string, range: Range, now = Date.now()): { bars: Bar[]; source: string } | null {
+  const fresh = (k: string) => {
+    const c = klineCache.get(k);
+    return c && now - c.at < KLINE_TTL ? c : null;
+  };
+  const hit = fresh(`${symbol}|${range}`);
+  if (hit) return hit;
+  const all = range !== "max" ? fresh(`${symbol}|max`) : null;
+  if (all && RANGE_DAYS[range]) {
+    const cut = new Date(now - RANGE_DAYS[range] * 86400000).toISOString().slice(0, 10);
+    return { bars: all.bars.filter((b) => b.t >= cut), source: all.source };
+  }
+  return null;
+}
+
 export function KlineChart({ code, spec: specProp, height = 320, pageMode = false, fitHeight = false, className, ...props }: KlineChartProps) {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -231,6 +257,13 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
     let cancelled = false;
     setLoading(true);
     setError(null);
+    const cached = klineCacheGet(spec.symbol, range);
+    if (cached) {
+      setBars(cached.bars);
+      setSource(cached.source);
+      setLoading(false);
+      return;
+    }
     fetch(`/api/tools/finance/kline?symbol=${encodeURIComponent(spec.symbol)}&period=${range}`, {
       headers: getHeaders(),
       credentials: "include",
@@ -239,6 +272,7 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
         const d = await r.json().catch(() => ({}));
         if (cancelled) return;
         if (!r.ok || d.status !== "success") throw new Error(d.error || `HTTP ${r.status}`);
+        klineCachePut(spec.symbol, range, d.data as Bar[], d.source || "");
         setBars(d.data as Bar[]);
         setSource(d.source || "");
       })
