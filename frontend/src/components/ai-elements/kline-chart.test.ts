@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aggregate, parseSpec } from "./kline-chart";
+import { aggregate, isLiveSymbol, mergeLive, parseSpec, type Bar } from "./kline-chart";
 
 describe("kline spec", () => {
   it("parses and defaults", () => {
@@ -82,5 +82,31 @@ describe("aggregate 季 / 年", () => {
     const y = aggregate(bars, "year");
     expect(y.map((x) => [x.open, x.high, x.low, x.close, x.volume])).toEqual([[10, 15, 9, 14, 300], [14, 18, 11, 12, 110]]);
     expect(parseSpec('{"symbol":"AAPL","interval":"quarter"}')?.interval).toBe("quarter");
+  });
+});
+
+describe("盘中实时这一根", () => {
+  const b = (t: string, c: number): Bar => ({ t, o: c, h: c, l: c, c, v: 100 });
+  const bars = [b("2026-11-11", 10), b("2026-11-12", 11)];
+  it("库里还没有今天 → 接上", () => {
+    const out = mergeLive(bars, { trading: true, bar: b("2026-11-13", 12) });
+    expect(out.map((x) => x.t)).toEqual(["2026-11-11", "2026-11-12", "2026-11-13"]);
+    // 周 K：今天并进本周（11-09 那周）
+    const wk = aggregate(out, "week");
+    expect(wk).toHaveLength(1);
+    expect(wk[0].close).toBe(12);
+    expect(wk[0].volume).toBe(300);
+  });
+  it("库里已经有今天（收盘同步后）或没有实时 → 不变", () => {
+    expect(mergeLive(bars, { trading: false, bar: b("2026-11-12", 99) })).toBe(bars);
+    expect(mergeLive(bars, null)).toBe(bars);
+    expect(mergeLive(bars, { trading: true })).toBe(bars);
+  });
+  it("只有 A 股、港股", () => {
+    expect(isLiveSymbol("600519.SH")).toBe(true);
+    expect(isLiveSymbol("002594.sz")).toBe(true);
+    expect(isLiveSymbol("0700.HK")).toBe(true);
+    expect(isLiveSymbol("AAPL")).toBe(false);
+    expect(isLiveSymbol("^N225")).toBe(false);
   });
 });

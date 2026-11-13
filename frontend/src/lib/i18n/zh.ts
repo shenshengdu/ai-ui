@@ -197,6 +197,8 @@ export const zh: Record<MessageKey, string> = {
   "kline.error": "K 线数据取不到",
   "kline.badSpec": "K 线图参数不对（需要股票代码）",
   "kline.source": "数据来源",
+  "kline.live": "今日实时",
+  "kline.liveHint": "库里收盘后（北京 18:40）才有当天日线，盘中这一根来自交易所 / 腾讯实时行情，交易时段每 30 秒刷新",
   "kline.openPage": "在 K 线页打开",
   "kline.pageTitle": "K 线图",
   "kline.searchPlaceholder": "搜索代码或名称，如 AAPL、600519、茅台、0700",

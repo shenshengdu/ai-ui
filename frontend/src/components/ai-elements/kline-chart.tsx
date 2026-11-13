@@ -226,6 +226,26 @@ export async function fetchKlineBars(symbol: string, range: Range): Promise<{ ba
   return { bars: d.data as Bar[], source: d.source || "" };
 }
 
+export type LiveQuote = { bar?: Bar; prev_close?: number; time?: string; trading: boolean; source?: string };
+
+/** A 股、港股才有盘中实时这一根 */
+export const isLiveSymbol = (s: string) => /^(\d{6}\.(SH|SS|SZ)|\d{1,5}\.HK)$/i.test(s);
+
+/** 盘中「今天这一根」（库里收盘后才有当天日线）：交易所 / 腾讯，后端缓存 15 秒 */
+export async function fetchLiveQuote(symbol: string): Promise<LiveQuote | null> {
+  const r = await fetch(`/api/tools/finance/live?symbol=${encodeURIComponent(symbol)}`, { headers: getHeaders(), credentials: "include" });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || d.status !== "success") return null;
+  return d as LiveQuote;
+}
+
+/** 库里最后一根比实时那根旧 → 把实时那根接上；库里已经有今天的（收盘同步后）就用库里的 */
+export function mergeLive(bars: Bar[], live: LiveQuote | null): Bar[] {
+  const b = live?.bar;
+  if (!b || b.c == null || !bars.length) return bars;
+  return b.t > bars[bars.length - 1].t ? [...bars, b] : bars;
+}
+
 export function klineCacheGet(symbol: string, range: Range, now = Date.now()): { bars: Bar[]; source: string } | null {
   const fresh = (k: string) => {
     const c = klineCache.get(k);
@@ -304,6 +324,7 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
   const [source, setSource] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [live, setLive] = useState<LiveQuote | null>(null);
   const isDark = useIsDark();
   const boxRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<Chart | null>(null);
@@ -351,6 +372,33 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
       cancelled = true;
     };
   }, [spec, range]);
+
+  // 盘中实时这一根：交易时段每 30 秒刷新（页面在后台时不取），收盘后停
+  const liveSymbol = spec && isLiveSymbol(spec.symbol) ? spec.symbol.toUpperCase() : "";
+  useEffect(() => {
+    setLive(null);
+    if (!liveSymbol) return;
+    let stop = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const tick = async () => {
+      let again = true;
+      if (typeof document === "undefined" || !document.hidden) {
+        const q = await fetchLiveQuote(liveSymbol).catch(() => null);
+        if (stop) return;
+        if (q) setLive(q);
+        again = !!q?.trading;
+      }
+      if (!stop && again) timer = setTimeout(tick, 30000);
+    };
+    void tick();
+    return () => {
+      stop = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [liveSymbol]);
+  const liveShown = !!(bars && live?.bar && mergeLive(bars, live).length > bars.length);
+  const liveRef = useRef(live);
+  liveRef.current = live;
 
   // 建图：等图表区域真的出现了再建。流式输出时代码块里的 JSON 先是半截（spec 为空、没有图表区域），
   // 写完才出现区域——只在第一次渲染时建会永远建不起来（空白，刷新后才有）
@@ -402,7 +450,7 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
     const chart = chartRef.current;
     if (!chart || !bars) return;
     chart.resize();
-    const data = aggregate(bars, interval);
+    const data = aggregate(mergeLive(bars, liveRef.current), interval);
     // 小数位：汇率（EUR/USD 1.08）这类价格小的要 4 位
     const last = data.length ? data[data.length - 1].close : 0;
     chart.setPriceVolumePrecision(last > 0 && last < 10 ? 4 : 2, 0);
@@ -415,6 +463,15 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
       chart.scrollToRealTime();
     }
   }, [bars, interval, version]);
+
+  // 实时那根变了：只更新最后一根（不整份重画，保留用户的缩放、拖动位置）
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart || !bars || !live?.bar) return;
+    const data = aggregate(mergeLive(bars, live), interval);
+    if (data.length) chart.updateData(data[data.length - 1]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live]);
 
   // 指标
   useEffect(() => {
@@ -578,7 +635,17 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
         </div>
       )}
       <div ref={boxRef} style={{ height: fitHeight ? Math.max(height, 140 + subCount * 80) : height + subCount * 80 }} className="w-full" />
-      {source && !bare && <div className="px-2 pb-1 text-right text-[11px] text-muted-foreground">{t("kline.source")}：{source}</div>}
+      {source && !bare && (
+        <div className="px-2 pb-1 text-right text-[11px] text-muted-foreground">
+          {liveShown && live?.time && (
+            <span className="mr-3" title={t("kline.liveHint")}>
+              <span className={cn("mr-1 inline-block size-1.5 rounded-full align-middle", live.trading ? "bg-red-500" : "bg-muted-foreground")} />
+              {t("kline.live")} {live.time.slice(5, 16)}（{live.source}）
+            </span>
+          )}
+          {t("kline.source")}：{source}
+        </div>
+      )}
     </div>
   );
 }
