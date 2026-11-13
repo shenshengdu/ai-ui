@@ -11,7 +11,8 @@ import { ArrowUpIcon, Loader2Icon, SquareIcon, WrenchIcon, XIcon } from "lucide-
 import { chatAPI } from "@/lib/api/chat";
 import { conversationsAPI } from "@/lib/api/conversations";
 import type { Message, Model, ToolCall } from "@/lib/api/types";
-import { Response, KlineInlineContext } from "@/components/ai-elements/response";
+import { ChartActionContext, ChartActionLabel, KlineInlineContext, Response } from "@/components/ai-elements/response";
+import { describeActions, extractChartActions, parseChartActions, type ChartAction } from "./chart-actions";
 import { useModelsContext } from "@/hooks/useModelsContext";
 import { useI18n } from "@/lib/i18n";
 
@@ -56,17 +57,33 @@ export function activePath(messages: Record<number, Message>): Message[] {
 }
 
 export function pageContext(symbol: string, name?: string): string {
-  return [
-    `用户正在 K 线页看：${symbol}${name ? `（${name}）` : ""}。用户说「这只」「它」「当前股票」都指它，除非用户换了别的代码。`,
-    "这个聊天框在 K 线图右侧，左边已经画好了这只股票的全部历史 K 线：不要输出 ```kline 代码块，也不要画图。",
-    "需要行情、技术面、公告、财务等数据就调用金融工具去查，不要凭记忆编数字；回答简洁、用中文。",
-  ].join("\n");
+  return `用户正在 K 线页看：${symbol}${name ? `（${name}）` : ""}。用户说「这只」「它」「当前股票」都指它，除非用户换了别的代码。
+这个聊天框在 K 线图右侧，左边已经画好了这只股票的全部历史 K 线：不要输出 \`\`\`kline 代码块。
+
+【怎么回答】
+- 简单问题直接答，需要时调一个工具。数据一律用工具查，不凭记忆编数字；引用数字带数据日期。
+- 用户要「深度研究」「全面分析」「能不能买」这类综合问题，按步骤做：
+  1. 先用 3–6 条列出要查什么（计划）；
+  2. 逐项调用工具：finance_quote（最新行情）、finance_technical（技术面）、finance_company kind=financials（最近 5 年财务）、finance_company kind=announcements（近期公告）；美股可再用 finance_stock、finance_valuation；需要大盘背景用 finance_global_market；
+  3. 最后按这个结构输出：**结论**（一两句）、**技术面**、**基本面与财报**、**近期公告**、**风险**、**关键价位**（支撑、压力），每部分注明数据日期。这是给用户自己做决定的分析，不代替用户下单。
+
+【在左边 K 线图上操作】
+回答末尾可以附一个 \`\`\`chart 代码块，内容是 JSON {"actions":[...]}，界面会照着改左边的图。可用动作：
+- {"type":"hline","price":1380,"label":"支撑 1380","kind":"support"} 画水平线（kind：support 支撑 / resistance 压力 / other）
+- {"type":"range","from":"2026-03-01","to":"2026-04-15","label":"箱体震荡"} 标一段时间区间
+- {"type":"interval","value":"week"} 切周期（day / week / month / quarter / year）
+- {"type":"indicators","add":["MACD"],"remove":["BOLL"]} 开关指标（MA EMA BOLL VOL MACD KDJ RSI）
+- {"type":"symbol","value":"0700.HK"} 换成另一只股票
+- {"type":"clear"} 先清掉之前画的线和区间
+说到具体的支撑位、压力位、形态区间时就画出来（通常先 clear 再画）；价位和日期必须来自工具返回的数据。一条回答最多一个 chart 块，放在最后，不要在正文里解释这个代码块。`;
 }
 
-export function StockChat({ symbol, name, onShowSymbol, onClose }: {
+export function StockChat({ symbol, name, onShowSymbol, onChartActions, onClose }: {
   symbol: string;
   name?: string;
   onShowSymbol: (sym: string) => void;
+  /** AI 回答里的 ```chart 动作：回答完自动执行一次；点按钮再执行 */
+  onChartActions?: (actions: ChartAction[]) => void;
   /** 手机抽屉：标题栏右边放关闭按钮 */
   onClose?: () => void;
 }) {
@@ -91,6 +108,7 @@ export function StockChat({ symbol, name, onShowSymbol, onClose }: {
   const abortRef = useRef<AbortController | null>(null);
   const assistantIdRef = useRef<number | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const replyRef = useRef("");
 
   // 换股票：找这只的对话，载入当前分支
   useEffect(() => {
@@ -141,6 +159,7 @@ export function StockChat({ symbol, name, onShowSymbol, onClose }: {
         }
         const ctrl = new AbortController();
         abortRef.current = ctrl;
+        replyRef.current = "";
         assistantIdRef.current = null;
         await chatAPI.sendMessageStream(
           id,
@@ -149,7 +168,10 @@ export function StockChat({ symbol, name, onShowSymbol, onClose }: {
           content,
           false,
           undefined,
-          (chunk) => patchLast((m) => ({ ...m, content: m.content + chunk })),
+          (chunk) => {
+            replyRef.current += chunk;
+            patchLast((m) => ({ ...m, content: m.content + chunk }));
+          },
           undefined,
           (tc) =>
             patchLast((m) => {
@@ -163,6 +185,8 @@ export function StockChat({ symbol, name, onShowSymbol, onClose }: {
           (done) => {
             lastIdRef.current = done.assistantMessageId || lastIdRef.current;
             patchLast((m) => ({ ...m, pending: false }));
+            const acts = extractChartActions(replyRef.current);
+            if (acts.length) onChartActions?.(acts);
           },
           (err) => patchLast((m) => ({ ...m, pending: false, error: err })),
           undefined,
@@ -177,7 +201,7 @@ export function StockChat({ symbol, name, onShowSymbol, onClose }: {
         setBusy(false);
       }
     },
-    [busy, activeModel, convId, symbol, name],
+    [busy, activeModel, convId, symbol, name, onChartActions],
   );
 
   const stop = () => {
@@ -186,12 +210,16 @@ export function StockChat({ symbol, name, onShowSymbol, onClose }: {
   };
 
   const quick = [
+    { k: "deep", q: `深度研究 ${symbol}：先列计划，再查行情、技术面、财务、公告，最后给结论、风险和关键价位，并在图上标出支撑和压力` },
     { k: "tech", q: `分析一下 ${symbol} 的技术面：趋势、均线、成交量、关键指标` },
     { k: "levels", q: `${symbol} 现在的支撑位和压力位大概在哪里？` },
     { k: "ann", q: `解读一下 ${symbol} 最近的公告，有哪些值得注意` },
     { k: "fin", q: `${symbol} 最近几期财报的要点：营收、利润、毛利率的变化` },
     { k: "peers", q: `${symbol} 和同行业主要公司比一比` },
   ];
+
+  const applyCode = useCallback((code: string) => onChartActions?.(parseChartActions(code)), [onChartActions]);
+  const describeCode = useCallback((code: string) => describeActions(parseChartActions(code)), []);
 
   const onKlineSpec = useCallback(
     (spec: unknown) => {
@@ -232,6 +260,8 @@ export function StockChat({ symbol, name, onShowSymbol, onClose }: {
         )}
       </div>
       <KlineInlineContext.Provider value={onKlineSpec}>
+      <ChartActionContext.Provider value={onChartActions ? applyCode : null}>
+      <ChartActionLabel.Provider value={describeCode}>
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-2 text-sm">
           {loading && <p className="text-xs text-muted-foreground">{t("kline.loading")}</p>}
           {!loading && msgs.length === 0 && <p className="text-xs text-muted-foreground">{t("kline.chat.empty")}</p>}
@@ -263,6 +293,8 @@ export function StockChat({ symbol, name, onShowSymbol, onClose }: {
           )}
           <div ref={endRef} />
         </div>
+      </ChartActionLabel.Provider>
+      </ChartActionContext.Provider>
       </KlineInlineContext.Provider>
       <div className="shrink-0 border-t px-2 py-2">
         <div className="mb-1.5 flex flex-wrap gap-1">

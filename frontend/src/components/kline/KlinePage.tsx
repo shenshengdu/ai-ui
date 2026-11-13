@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeftIcon, CandlestickChartIcon, GlobeIcon, MessageSquareIcon, SearchIcon } from "lucide-react";
 import { StockChat } from "./StockChat";
+import type { ChartAction } from "./chart-actions";
 import { ALL_MARKET_SYMBOLS, MARKET_GROUPS, MARKET_NAME, fmtQuotePct, fmtQuotePrice, type MarketQuote } from "./markets";
 import { CompanyPanel, hasCompanyData } from "./CompanyPanel";
 import { INTERVALS, KlineChart, type Interval, type KlineSpec } from "@/components/ai-elements/kline-chart";
@@ -283,6 +284,14 @@ export function KlinePage() {
   const narrow = useIsNarrow();
   const [chatOpen, setChatOpen] = useState(() => readLS(CHAT_OPEN_KEY) !== "0" && !(typeof window !== "undefined" && window.innerWidth < 768));
   const [chatW, setChatW] = useState(() => Math.max(300, Number(readLS(CHAT_W_KEY)) || 400));
+  // AI 的图上操作：换股票由这里做，其余交给图（换了股票，图重建后数据到了再执行）
+  const [chartCmd, setChartCmd] = useState<{ seq: number; actions: ChartAction[] } | null>(null);
+  const onChartActions = (actions: ChartAction[]) => {
+    const sw = [...actions].reverse().find((a) => a.type === "symbol");
+    const rest = actions.filter((a) => a.type !== "symbol");
+    if (sw && sw.type === "symbol" && sw.value !== symbol) pick({ symbol: sw.value });
+    if (rest.length) setChartCmd((c) => ({ seq: (c?.seq ?? 0) + 1, actions: rest }));
+  };
   const toggleChat = () =>
     setChatOpen((v) => {
       if (!narrow) writeLS(CHAT_OPEN_KEY, v ? "0" : "1");
@@ -418,11 +427,11 @@ export function KlinePage() {
             {current?.name && <div className="shrink-0 px-1 pb-1 text-sm text-muted-foreground">{current.name}</div>}
             {hasCompanyData(spec.symbol) ? (
               <SplitView
-                chart={(h) => <KlineChart key={spec.symbol} spec={spec} height={h} pageMode fitHeight className="my-0" />}
+                chart={(h) => <KlineChart key={spec.symbol} spec={spec} height={h} pageMode fitHeight command={chartCmd} className="my-0" />}
                 panel={<CompanyPanel key={`co-${spec.symbol}`} symbol={spec.symbol} className="min-h-0 flex-1" />}
               />
             ) : (
-              <KlineChart key={spec.symbol} spec={spec} height={height} pageMode className="my-0" />
+              <KlineChart key={spec.symbol} spec={spec} height={height} pageMode command={chartCmd} className="my-0" />
             )}
           </>
         ) : (
@@ -442,7 +451,7 @@ export function KlinePage() {
         <>
           <ChatResizer width={chatW} setWidth={setChatW} />
           <aside style={{ width: chatW }} className="min-h-0 shrink-0 border-l">
-            <StockChat symbol={spec.symbol} name={current?.name} onShowSymbol={(sym) => pick({ symbol: sym })} />
+            <StockChat symbol={spec.symbol} name={current?.name} onShowSymbol={(sym) => pick({ symbol: sym })} onChartActions={onChartActions} />
           </aside>
         </>
       )}
@@ -450,7 +459,7 @@ export function KlinePage() {
       {/* 手机：从底部拉起 */}
       {spec && chatOpen && narrow && (
         <div className="fixed inset-x-0 bottom-0 z-30 flex h-[72dvh] flex-col rounded-t-xl border-t bg-background shadow-2xl">
-          <StockChat symbol={spec.symbol} name={current?.name} onShowSymbol={(sym) => pick({ symbol: sym })} onClose={toggleChat} />
+          <StockChat symbol={spec.symbol} name={current?.name} onShowSymbol={(sym) => pick({ symbol: sym })} onChartActions={onChartActions} onClose={toggleChat} />
         </div>
       )}
     </div>

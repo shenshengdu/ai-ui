@@ -36,14 +36,14 @@ var financeHTTPClient = &http.Client{}
 
 func isFinanceTool(name string) bool {
 	switch name {
-	case "finance_stock", "finance_technical", "finance_valuation", "finance_market", "finance_market_news", "finance_decision", "finance_quote", "finance_global_market", "finance_peer_compare", "finance_peer_group_save", "finance_peer_quant", "finance_warmup_status", "finance_account", "finance_judgement", "finance_macro":
+	case "finance_stock", "finance_technical", "finance_valuation", "finance_market", "finance_market_news", "finance_decision", "finance_quote", "finance_global_market", "finance_peer_compare", "finance_peer_group_save", "finance_peer_quant", "finance_warmup_status", "finance_account", "finance_judgement", "finance_macro", "finance_company":
 		return true
 	}
 	return false
 }
 
 func financeBuiltInTools() []*Tool {
-	return append(append(append(financeBaseTools(), financeQuickTools()...), financeAccountTools()...), financeJudgementTools()...)
+	return append(append(append(append(financeBaseTools(), financeQuickTools()...), financeAccountTools()...), financeJudgementTools()...), financeCompanyTools()...)
 }
 
 func financeBaseTools() []*Tool {
@@ -353,6 +353,12 @@ func financeTool(ctx context.Context, name, args string) providers.ToolOutput {
 			return financeError("%v", aerr)
 		}
 		path, timeout = ap, 30*time.Second
+	case "finance_company":
+		cp, cerr := financeCompanyPath(p.Symbol, p.Kind, p.Limit)
+		if cerr != nil {
+			return financeError("%v", cerr)
+		}
+		path, timeout = cp, 40*time.Second
 	case "finance_judgement":
 		jp, jerr := financeJudgementPath(p.Symbol, p.View, p.EarningsDate)
 		if jerr != nil {
@@ -412,6 +418,8 @@ func financeTool(ctx context.Context, name, args string) providers.ToolOutput {
 		return providers.ToolOutput{Content: formatFinanceQuote(compact.Bytes())}
 	case "finance_global_market":
 		return providers.ToolOutput{Content: formatGlobalMarket(compact.Bytes())}
+	case "finance_company":
+		return providers.ToolOutput{Content: formatFinanceCompany(p.Kind, compact.Bytes(), time.Now())}
 	}
 	return providers.ToolOutput{Content: prefix + compact.String()}
 }

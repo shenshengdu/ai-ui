@@ -215,6 +215,7 @@ export const en = {
   "kline.chat.send": "Send",
   "kline.chat.stop": "Stop",
   "kline.chat.noModel": "No model available: enable DeepSeek V4 Flash or GPT Luna in settings",
+  "kline.chat.q.deep": "Deep research",
   "kline.chat.q.tech": "Technicals",
   "kline.chat.q.levels": "Support & resistance",
   "kline.chat.q.ann": "Recent filings",
