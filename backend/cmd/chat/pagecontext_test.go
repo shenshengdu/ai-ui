@@ -35,3 +35,19 @@ func TestToolsForPage(t *testing.T) {
 		t.Fatalf("page chat must drop publish_report: %+v", got)
 	}
 }
+
+func TestPageBudget(t *testing.T) {
+	b := pageBudget(contextBudget{})
+	if b.maxTurns != pageMaxTurns || !b.compactTools || b.recentTools() != 1 {
+		t.Fatalf("unlimited user budget → page caps: %+v", b)
+	}
+	if b := pageBudget(contextBudget{maxTurns: 3}); b.maxTurns != 3 {
+		t.Fatalf("user's smaller limit wins: %+v", b)
+	}
+	if b := pageBudget(contextBudget{maxTurns: 20, compactTools: false}); b.maxTurns != pageMaxTurns || !b.compactTools {
+		t.Fatalf("page chat always compacts: %+v", b)
+	}
+	if (contextBudget{}).recentTools() != recentToolTurns {
+		t.Fatal("main chat keeps default")
+	}
+}

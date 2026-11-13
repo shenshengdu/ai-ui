@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUpIcon, Loader2Icon, SquareIcon, WrenchIcon, XIcon } from "lucide-react";
+import { ArrowUpIcon, EraserIcon, Loader2Icon, SquareIcon, WrenchIcon, XIcon } from "lucide-react";
 import { chatAPI } from "@/lib/api/chat";
 import { conversationsAPI } from "@/lib/api/conversations";
 import type { Message, Model, ToolCall } from "@/lib/api/types";
@@ -16,7 +16,32 @@ import { describeActions, extractChartActions, parseChartActions, type ChartActi
 import { useModelsContext } from "@/hooks/useModelsContext";
 import { useI18n } from "@/lib/i18n";
 
-type ChatMsg = { key: string; role: "user" | "assistant"; content: string; tools: ToolCall[]; pending?: boolean; error?: string };
+type ChatMsg = {
+  key: string;
+  role: "user" | "assistant";
+  content: string;
+  tools: ToolCall[];
+  pending?: boolean;
+  error?: string;
+  /** 这一轮发给模型的上下文、模型输出的 token 数 */
+  promptTokens?: number;
+  outputTokens?: number;
+};
+
+/** 上下文超过这么多 token 就提示清空 */
+export const LONG_CONTEXT_TOKENS = 30000;
+
+export function fmtTokens(n?: number): string {
+  if (!n || n <= 0) return "";
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+}
+
+/** 清空上下文时旧对话改成的标题：不再以「📈 代码」开头，下次就开新对话；旧的仍在对话列表里 */
+export function archiveTitle(symbol: string, name: string | undefined, now = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  const ts = `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())} ${p(now.getHours())}:${p(now.getMinutes())}`;
+  return `🗂 ${symbol}${name ? ` ${name}` : ""} · ${ts} 存档`;
+}
 
 const MODEL_KEY = "kline.chatModel";
 
@@ -133,7 +158,8 @@ export function StockChat({ symbol, name, onShowSymbol, onChartActions, onClose 
         const path = activePath(all);
         setConvId(c.id);
         lastIdRef.current = path.length ? path[path.length - 1].id : 0;
-        setMsgs(path.map((m) => ({ key: String(m.id), role: m.role as "user" | "assistant", content: m.content, tools: m.tools ?? [], error: m.error })));
+        setMsgs(path.map((m) => ({ key: String(m.id), role: m.role as "user" | "assistant", content: m.content, tools: m.tools ?? [], error: m.error,
+          promptTokens: m.contextSize, outputTokens: m.tokenCount })));
       })
       .catch(() => {})
       .finally(() => !cancelled && setLoading(false));
@@ -190,7 +216,7 @@ export function StockChat({ symbol, name, onShowSymbol, onChartActions, onClose 
           },
           (done) => {
             lastIdRef.current = done.assistantMessageId || lastIdRef.current;
-            patchLast((m) => ({ ...m, pending: false }));
+            patchLast((m) => ({ ...m, pending: false, promptTokens: done.streamStats?.PromptTokens, outputTokens: done.streamStats?.CompletionTokens }));
             const acts = extractChartActions(replyRef.current);
             if (acts.length) onChartActions?.(acts);
           },
@@ -209,6 +235,25 @@ export function StockChat({ symbol, name, onShowSymbol, onChartActions, onClose 
     },
     [busy, activeModel, convId, symbol, name, onChartActions],
   );
+
+  // 清空上下文：旧对话改名存档（还在首页对话列表里），这里重新开始；下一条消息开新对话
+  const [cleared, setCleared] = useState(false);
+  const clearContext = async () => {
+    if (busy) return;
+    if (convId && msgs.length) {
+      try {
+        await conversationsAPI.renameConversation(convId, archiveTitle(symbol, name));
+      } catch {
+        /* 改名失败也照样开新对话 */
+      }
+    }
+    setConvId(null);
+    setMsgs([]);
+    lastIdRef.current = 0;
+    setCleared(true);
+  };
+  useEffect(() => setCleared(false), [symbol]);
+  const lastPrompt = [...msgs].reverse().find((m) => m.role === "assistant" && m.promptTokens)?.promptTokens ?? 0;
 
   const stop = () => {
     if (assistantIdRef.current) chatAPI.cancelStream(assistantIdRef.current).catch(() => {});
@@ -259,6 +304,16 @@ export function StockChat({ symbol, name, onShowSymbol, onChartActions, onClose 
             </option>
           ))}
         </select>
+        <button
+          type="button"
+          onClick={clearContext}
+          disabled={busy || (msgs.length === 0 && !convId)}
+          className="rounded p-1 text-muted-foreground hover:bg-muted disabled:opacity-40"
+          title={t("kline.chat.clear")}
+          aria-label={t("kline.chat.clear")}
+        >
+          <EraserIcon className="size-4" />
+        </button>
         {onClose && (
           <button type="button" onClick={onClose} className="rounded p-1 text-muted-foreground hover:bg-muted" aria-label={t("kline.chat.close")}>
             <XIcon className="size-4" />
@@ -270,7 +325,9 @@ export function StockChat({ symbol, name, onShowSymbol, onChartActions, onClose 
       <ChartActionLabel.Provider value={describeCode}>
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-2 text-sm">
           {loading && <p className="text-xs text-muted-foreground">{t("kline.loading")}</p>}
-          {!loading && msgs.length === 0 && <p className="text-xs text-muted-foreground">{t("kline.chat.empty")}</p>}
+          {!loading && msgs.length === 0 && (
+            <p className="text-xs text-muted-foreground">{cleared ? t("kline.chat.cleared") : t("kline.chat.empty")}</p>
+          )}
           {msgs.map((m) =>
             m.role === "user" ? (
               <div key={m.key} className="ml-6 rounded-lg bg-muted px-3 py-2 whitespace-pre-wrap break-words">
@@ -294,6 +351,11 @@ export function StockChat({ symbol, name, onShowSymbol, onChartActions, onClose 
                   <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
                 ) : null}
                 {m.error && <p className="mt-1 text-xs text-destructive">{m.error}</p>}
+                {!m.pending && (m.promptTokens || m.outputTokens) ? (
+                  <p className="mt-1 text-[11px] text-muted-foreground/70">
+                    {t("kline.chat.tokens", { ctx: fmtTokens(m.promptTokens) || "-", out: fmtTokens(m.outputTokens) || "-" })}
+                  </p>
+                ) : null}
               </div>
             ),
           )}
@@ -302,6 +364,14 @@ export function StockChat({ symbol, name, onShowSymbol, onChartActions, onClose 
       </ChartActionLabel.Provider>
       </ChartActionContext.Provider>
       </KlineInlineContext.Provider>
+      {lastPrompt > LONG_CONTEXT_TOKENS && !busy && (
+        <div className="flex shrink-0 items-center gap-2 border-t bg-amber-50 px-3 py-1.5 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+          <span className="flex-1">{t("kline.chat.longContext", { n: fmtTokens(lastPrompt) })}</span>
+          <button type="button" onClick={clearContext} className="shrink-0 rounded border border-current px-1.5 py-0.5 hover:opacity-80">
+            {t("kline.chat.clearShort")}
+          </button>
+        </div>
+      )}
       <div className="shrink-0 border-t px-2 py-2">
         <div className="mb-1.5 flex flex-wrap gap-1">
           {quick.map((x) => (

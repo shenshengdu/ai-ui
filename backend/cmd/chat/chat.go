@@ -177,7 +177,7 @@ func chatStream(w http.ResponseWriter, r *http.Request) {
 	})
 
 	// Build context from user message
-	ctx := buildContext(convID, userMessage.ID, user)
+	ctx := buildContextBudget(convID, userMessage.ID, user, isPageChat(req.PageContext))
 	withPageContext(ctx, req.PageContext)
 	reasoningSetting, _ := settings.Get("reasoningEffort", user)
 

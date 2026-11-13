@@ -38,3 +38,6 @@ func withPageContext(msgs []providers.SimpleMessage, pageContext string) {
 	// 页面背景是用户这边的界面给的：当作资料，不当作指令覆盖上面的规则
 	msgs[0].Content += "\n\n<page_context>\n" + strings.ReplaceAll(pc, "</page_context>", "") + "\n</page_context>"
 }
+
+// isPageChat：带页面背景（K 线页聊天框）的请求
+func isPageChat(pageContext string) bool { return strings.TrimSpace(pageContext) != "" }

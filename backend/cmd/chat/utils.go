@@ -109,6 +109,11 @@ func compileSystemPrompt(user string) string {
 
 // Helper
 func buildContext(convID string, start int, user string) []providers.SimpleMessage {
+	return buildContextBudget(convID, start, user, false)
+}
+
+// buildContextBudget：pageMode（K 线页聊天框）用更省的上下文预算，见 pageBudget
+func buildContextBudget(convID string, start int, user string, pageMode bool) []providers.SimpleMessage {
 	var convMessages = getAllConversationMessages(convID, user) // todo: cache or something
 	var path []int
 	var current = start
@@ -148,6 +153,9 @@ func buildContext(convID string, start int, user string) []providers.SimpleMessa
 		return ""
 	}
 	budget := loadContextBudget(user)
+	if pageMode {
+		budget = pageBudget(budget)
+	}
 	ordered = trimPathToTurns(ordered, roleOf, budget.maxTurns)
 	turnAge := turnAgeFromEnd(ordered, roleOf)
 
@@ -156,7 +164,7 @@ func buildContext(convID string, start int, user string) []providers.SimpleMessa
 		if !ok {
 			break
 		}
-		compactOld := budget.compactTools && turnAge[i] >= recentToolTurns
+		compactOld := budget.compactTools && turnAge[i] >= budget.recentTools()
 
 		// If the assistant message has tool calls, include the text content on the
 		// first tool-call message so the model sees what it said before using tools.
