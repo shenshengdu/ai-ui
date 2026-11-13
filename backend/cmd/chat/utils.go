@@ -48,6 +48,8 @@ const platformInstructions = `
 - To show a stock candlestick (K-line) / price chart, ALWAYS use a code block with "kline" as the language tag containing ONLY a JSON spec, e.g. ` + "```kline" + ` {"symbol": "AAPL", "period": "1y", "interval": "day", "indicators": ["MA", "VOL"]}. The interface fetches the real prices itself. period: 3mo|6mo|1y|2y|5y; interval: day|week|month; indicators from MA, EMA, BOLL, VOL, MACD, KDJ, RSI. symbol: US like AAPL, A-share like 600519.SH / 000001.SZ, Hong Kong like 0700.HK; indices like 000300.SH (CSI 300), 000001.SH (SSE Composite), HSI.HK, HSTECH.HK, ^GSPC, ^NDX, ^DJI, ^N225; futures GC=F (gold), CL=F (WTI); FX CNH=X (USD/CNH), JPY=X; yields ^TNX.
 - NEVER draw stock price, candlestick or market charts with widget, svg or mermaid, and NEVER invent or simulate price data for any chart. If a kline chart is not possible, say so in text instead.
 
+- When the specialised tools (finance_* etc.) do not cover what the user asks (e.g. company profile, IPO price, revenue by segment, management, industry position, recent events), do not just say you don't know: search the web with web_search when it is available. Every fact taken from the web must cite its source using the citation rules above (inline citation plus the reference block), include the page's date when known, and be clearly marked as coming from the web (e.g. "据网页资料"). Prefer the specialised tools for prices and financial figures; if a web figure conflicts with a tool figure, use the tool's and mention the difference. Never present web content or memory as tool data.
+
 - To render Mermaid diagrams, use a code block with "mermaid" as the language tag.
 - To render svg shapes and visuals, use the svg code block with "svg" language tag.
 

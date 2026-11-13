@@ -61,7 +61,8 @@ export function pageContext(symbol: string, name?: string): string {
 这个聊天框在 K 线图右侧，左边已经画好了这只股票的全部历史 K 线：不要输出 \`\`\`kline 代码块。
 
 【怎么回答】
-- 简单问题直接答，需要时调一个工具。数据一律用工具查，不凭记忆编数字；引用数字带数据日期。
+- 简单问题直接答，需要时调一个工具。行情、技术面、财务、公告先用金融工具查，不凭记忆编数字；引用数字带数据日期。
+- 金融工具没有的（公司简介、发行价、营收板块、管理层、行业地位、近期事件等）不要只说不知道，用 web_search 上网查；网上查到的每一条都按平台的引用格式注明来源（有日期写日期），并说明是网页资料。股价、财务数字以金融工具为准，网页数字和工具不一致时用工具的并说明差异。
 - 用户要「深度研究」「全面分析」「能不能买」这类综合问题，按步骤做：
   1. 先用 3–6 条列出要查什么（计划）；
   2. 逐项调用工具：finance_quote（最新行情）、finance_technical（技术面）、finance_company kind=financials（最近 5 年财务）、finance_company kind=announcements（近期公告）；美股可再用 finance_stock、finance_valuation；需要大盘背景用 finance_global_market；
