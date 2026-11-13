@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -15,7 +16,8 @@ import (
 
 // 盘中「今天这一根」K 线：库里的日线要收盘后（北京 18:40）才有当天的，K 线页用这个临时拼上最后一根（不写库）。
 // GET /api/tools/finance/live?symbol=002594.SZ
-// A 股：交易所网站为主（深市 szse.cn、沪市 yunhq.sse.com.cn），失败退回腾讯；港股：腾讯。
+// A 股：通达信为主（金融平台 → 阿里云 /live，秒级、无额度），失败退回交易所网站（深市 szse.cn、沪市 yunhq.sse.com.cn），
+// 再失败用腾讯；港股：腾讯。
 // 这些请求从本机发出，不占阿里云每日收盘同步（腾讯）的请求额度。
 
 var (
@@ -104,6 +106,7 @@ func liveLookup(ctx context.Context, symbol string, m []string) liveResp {
 		srcs = []src{{"腾讯", func() (*liveQuote, error) { return liveTencent(ctx, "hk"+code, true) }}}
 	} else {
 		code, ex := m[1], m[2]
+		srcs = append(srcs, src{"通达信", func() (*liveQuote, error) { return liveTDX(ctx, code, ex) }})
 		if ex == "SZ" {
 			srcs = append(srcs, src{"深交所", func() (*liveQuote, error) { return liveSZSE(ctx, code) }})
 			srcs = append(srcs, src{"腾讯", func() (*liveQuote, error) { return liveTencent(ctx, "sz"+code, false) }})
@@ -266,4 +269,51 @@ func liveTencent(ctx context.Context, key string, hk bool) (*liveQuote, error) {
 	}
 	return &liveQuote{date: t[:4] + "-" + t[4:6] + "-" + t[6:8], clock: t[8:10] + ":" + t[10:12] + ":" + t[12:14],
 		open: open, high: pf(p[33]), low: pf(p[34]), last: last, prev: pf(p[4]), v: vol}, nil
+}
+
+// 通达信（经金融平台 /api/v1/markets/a_live → 阿里云 /live）：
+// {"quotes": {"600519.SH": {date, time, open, high, low, price, preclose, volume, amount}}}；没有这只 → 错误（换下一个源）
+func liveTDX(ctx context.Context, code, ex string) (*liveQuote, error) {
+	base := strings.TrimRight(strings.TrimSpace(os.Getenv("FINANCE_BASE_URL")), "/")
+	key := strings.TrimSpace(os.Getenv("FINANCE_API_KEY"))
+	if base == "" || key == "" {
+		return nil, fmt.Errorf("没有配置金融平台")
+	}
+	if ex == "SS" {
+		ex = "SH"
+	}
+	sym := code + "." + ex
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/v1/markets/a_live?symbols="+sym, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-API-Key", key)
+	resp, err := liveHTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("金融平台连不上")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("金融平台 HTTP %d", resp.StatusCode)
+	}
+	var d struct {
+		Quotes map[string]struct {
+			Date, Time                               string
+			Open, High, Low, Price, Preclose, Volume float64
+		} `json:"quotes"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&d); err != nil {
+		return nil, fmt.Errorf("通达信返回格式不对")
+	}
+	q, ok := d.Quotes[sym]
+	if !ok || q.Price <= 0 || len(q.Date) != 10 {
+		return nil, fmt.Errorf("通达信没有这只的行情")
+	}
+	clock := q.Time
+	if len(clock) < 8 {
+		clock = "00:00:00"
+	}
+	return &liveQuote{date: q.Date, clock: clock[:8], open: q.Open, high: q.High, low: q.Low, last: q.Price, prev: q.Preclose,
+		v: q.Volume}, nil
 }

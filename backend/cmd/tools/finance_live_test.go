@@ -22,6 +22,8 @@ func liveSetup(t *testing.T, h http.HandlerFunc, now time.Time) *int {
 		at time.Time
 	}{}
 	liveCacheMu.Unlock()
+	t.Setenv("FINANCE_BASE_URL", srv.URL+"/fp")
+	t.Setenv("FINANCE_API_KEY", "k")
 	t.Cleanup(func() { liveSZSEURL, liveSSEURL, liveTencentURL, liveNow = oldZ, oldS, oldT, oldN })
 	return &calls
 }
@@ -53,7 +55,7 @@ func TestLiveSZSE(t *testing.T) {
 			t.Fatalf("%+v", r)
 		}
 	}
-	if *calls != 1 {
+	if *calls != 2 { // 通达信（这里没有）+ 深交所；第二次用缓存
 		t.Fatalf("second call should be cached, calls %d", *calls)
 	}
 }
@@ -107,6 +109,24 @@ func TestLiveHKAndPreOpen(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 	if r := liveCall(t, "AAPL"); r.Status != "error" {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestLiveTDXFirst(t *testing.T) {
+	calls := liveSetup(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/fp/api/v1/markets/a_live" {
+			if r.Header.Get("X-API-Key") != "k" || r.URL.Query().Get("symbols") != "600519.SH" {
+				http.Error(w, "x", 400)
+				return
+			}
+			_, _ = w.Write([]byte(`{"status":"success","quotes":{"600519.SH":{"date":"2026-11-13","time":"14:29:59","open":1404,"high":1437.69,"low":1394,"price":1435.26,"preclose":1410.27,"volume":4177984,"amount":5.9e9,"source":"tdx"}}}`))
+			return
+		}
+		t.Fatalf("交易所不该被调用：%s", r.URL.Path)
+	}, bj1430)
+	r := liveCall(t, "600519.SS")
+	if r.Source != "通达信" || *r.Bar.C != 1435.26 || *r.Bar.V != 4177984 || r.Time != "2026-11-13 14:29:59" || !r.Trading || *calls != 1 {
 		t.Fatalf("%+v", r)
 	}
 }
