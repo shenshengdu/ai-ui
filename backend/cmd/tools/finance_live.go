@@ -32,7 +32,10 @@ var (
 )
 
 // 6 位.SH/SZ（A 股）| 1–5 位.HK（港股）| 美股字母代码 | 雅虎代码：^ 开头的指数、=X 汇率、=F 期货
-var liveSymbolRe = regexp.MustCompile(`^(\d{6})\.(SH|SS|SZ)$|^(\d{1,5})\.HK$|^([A-Z][A-Z0-9\-]{0,5}(\.[A-Z])?)$|^(\^[A-Z0-9.\-]{1,12}|[A-Z0-9.\-]{1,12}=[XF])$`)
+var liveSymbolRe = regexp.MustCompile(`^(\d{6})\.(SH|SS|SZ)$|^(\d{1,5})\.HK$|^([A-Z][A-Z0-9\-]{0,5}(\.[A-Z])?)$|^(\^[A-Z0-9.\-]{1,12}|[A-Z0-9.\-]{1,12}=[XF])$|^(HSI|HSCEI|HSTECH)\.HK$`)
+
+// 港股指数：富途（经金融平台 hk_live）实时；雅虎的 ^HSI 等延迟 15 分钟，排在后面
+var liveHKIndexYahoo = map[string]string{"^HSI": "HSI", "^HSCE": "HSCEI"}
 
 const liveTTL = 15 * time.Second
 
@@ -113,7 +116,17 @@ func liveLookup(ctx context.Context, symbol string, m []string) liveResp {
 	hk := m[3] != ""
 	us := m[4] != ""
 	yahoo := m[6] != ""
-	if yahoo { // 指数 / 汇率 / 期货：只有雅虎
+	hkIndex := m[7]
+	if hkIndex == "" && yahoo {
+		hkIndex = liveHKIndexYahoo[m[6]]
+	}
+	if hkIndex != "" { // 港股指数：富途实时，雅虎（有的话）兜底
+		hk = true
+		srcs = []src{{"富途", func() (*liveQuote, error) { return liveTiger(ctx, hkIndex) }}}
+		if yahoo {
+			srcs = append(srcs, src{"雅虎", func() (*liveQuote, error) { return liveYahoo(ctx, m[6]) }})
+		}
+	} else if yahoo { // 指数 / 汇率 / 期货：只有雅虎
 		srcs = []src{{"雅虎", func() (*liveQuote, error) { return liveYahoo(ctx, m[6]) }}}
 	} else if us { // 美股：雅虎优先（全部美股、全市场成交量、不要密钥），不行再金融平台（FMP / Alpaca+Finnhub）
 		srcs = []src{{"雅虎", func() (*liveQuote, error) { return liveYahoo(ctx, m[4]) }},
@@ -352,7 +365,9 @@ func liveTiger(ctx context.Context, five string) (*liveQuote, error) {
 		} `json:"quotes"`
 	}
 	sym := strings.TrimLeft(five, "0")
-	if len(sym) < 4 {
+	if five != "" && (five[0] < '0' || five[0] > '9') { // 港股指数：HSI / HSCEI / HSTECH
+		sym = five
+	} else if len(sym) < 4 {
 		sym = fmt.Sprintf("%04s", sym)
 		sym = strings.ReplaceAll(sym, " ", "0")
 	}

@@ -236,9 +236,9 @@ export type LiveQuote = {
   source?: string;
 };
 
-/** 有盘中实时这一根：A 股、港股、美股（字母代码），以及雅虎的指数（^）、汇率（=X）、期货（=F） */
+/** 有盘中实时这一根：A 股、港股、美股（字母代码）、港股指数（HSI.HK 等，富途），以及雅虎的指数（^）、汇率（=X）、期货（=F） */
 export const isLiveSymbol = (s: string) =>
-  /^(\d{6}\.(SH|SS|SZ)|\d{1,5}\.HK|[A-Z][A-Z0-9-]{0,5}(\.[A-Z])?|\^[A-Z0-9.-]{1,12}|[A-Z0-9.-]{1,12}=[XF])$/i.test(s);
+  /^(\d{6}\.(SH|SS|SZ)|\d{1,5}\.HK|[A-Z][A-Z0-9-]{0,5}(\.[A-Z])?|\^[A-Z0-9.-]{1,12}|[A-Z0-9.-]{1,12}=[XF]|(HSI|HSCEI|HSTECH)\.HK)$/i.test(s);
 
 /** 盘中「今天这一根」（库里收盘后才有当天日线）：交易所 / 腾讯，后端缓存 15 秒 */
 export async function fetchLiveQuote(symbol: string): Promise<LiveQuote | null> {
