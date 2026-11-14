@@ -93,14 +93,30 @@ async function getJSON(url: string, fetchImpl: typeof fetch) {
   return d;
 }
 
+// 服务器上失败的状态叫 error，页面统一叫 failed
+function norm<T extends { status: string }>(b: T): T {
+  return b && (b.status as string) === "error" ? { ...b, status: "failed" } : b;
+}
+
 export async function fetchBacktests(limit = 50, fetchImpl: typeof fetch = fetch): Promise<BacktestItem[]> {
   const d = await getJSON(`/api/tools/finance/backtests?limit=${limit}`, fetchImpl);
-  return Array.isArray(d.backtests) ? d.backtests : [];
+  return Array.isArray(d.backtests) ? d.backtests.map(norm) : [];
+}
+
+export async function deleteBacktest(id: string, fetchImpl: typeof fetch = fetch): Promise<void> {
+  const r = await fetchImpl("/api/tools/finance/backtest/delete", {
+    method: "POST",
+    headers: getHeaders({ "Content-Type": "application/json" }),
+    credentials: "include",
+    body: JSON.stringify({ id }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || d?.status !== "success") throw new Error(d?.error || `HTTP ${r.status}`);
 }
 
 export async function fetchBacktest(id: string, full = true, fetchImpl: typeof fetch = fetch): Promise<Backtest> {
   const d = await getJSON(`/api/tools/finance/backtest?id=${encodeURIComponent(id)}&full=${full ? 1 : 0}`, fetchImpl);
-  return d.backtest as Backtest;
+  return norm(d.backtest as Backtest);
 }
 
 export async function renameBacktest(id: string, name: string, fetchImpl: typeof fetch = fetch): Promise<{ name: string; attempt?: number }> {

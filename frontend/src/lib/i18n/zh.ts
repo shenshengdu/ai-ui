@@ -545,6 +545,8 @@ export const zh: Record<MessageKey, string> = {
   "bt.ahead": "前面还有 {n} 个",
   "bt.attempt": "第 {n} 次",
   "bt.rename": "改名",
+  "bt.deleteTitle": "删除这个回测？",
+  "bt.deleteDesc": "将永久删除「{name}」及其结果；排队中的会取消，不会再运行。",
   "bt.back": "返回",
   "bt.notFound": "没有这个回测",
   "bt.cagr": "年化收益",

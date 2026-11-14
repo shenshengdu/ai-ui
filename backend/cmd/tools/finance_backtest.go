@@ -8,6 +8,7 @@ package tools
 //   finance_backtest_rename  -> PATCH /api/v1/backtest/{id} {name}
 // 页面：GET /api/tools/finance/backtests、/api/tools/finance/backtest?id=（右侧回测列表、/backtest/:id 详情页）
 //       POST /api/tools/finance/backtest/rename {id, name}（详情页标题旁改名）
+//       POST /api/tools/finance/backtest/delete {id}（详情页删除；正在跑的平台返回 409）
 
 import (
 	"bytes"
@@ -289,7 +290,7 @@ func backtestTool(ctx context.Context, name, args string) providers.ToolOutput {
 				continue
 			}
 			last = b
-			if s := backtestStatus(b); s == "done" || s == "failed" {
+			if s := backtestStatus(b); s == "done" || s == "failed" || s == "error" {
 				return providers.ToolOutput{Content: backtestForModel(b)}
 			}
 		}
@@ -337,6 +338,31 @@ func financeBacktestRenameHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "error", "error": err.Error()})
 		return
 	}
+	if err != nil {
+		w.WriteHeader(http.StatusBadGateway)
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "error", "error": "回测服务连不上"})
+		return
+	}
+	if code < 200 || code > 299 {
+		w.WriteHeader(code)
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "error", "error": backtestErrText(code, body)})
+		return
+	}
+	_, _ = w.Write(body)
+}
+
+// 页面用：POST /api/tools/finance/backtest/delete {id}
+func financeBacktestDeleteHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var p struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&p); err != nil || !backtestIDRe.MatchString(p.ID) {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "error", "error": "id 是 12 位十六进制"})
+		return
+	}
+	code, body, err := backtestCall(r.Context(), http.MethodDelete, "/api/v1/backtest/"+p.ID, nil, 30*time.Second)
 	if err != nil {
 		w.WriteHeader(http.StatusBadGateway)
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "error", "error": "回测服务连不上"})
