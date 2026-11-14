@@ -198,7 +198,7 @@ export const zh: Record<MessageKey, string> = {
   "kline.badSpec": "K 线图参数不对（需要股票代码）",
   "kline.source": "数据来源",
   "kline.live": "今日实时",
-  "kline.liveDelayed": "今日（延迟约 15 分钟）",
+  "kline.liveDelayed": "今日（延迟约 {n} 分钟）",
   "kline.liveHint": "库里收盘后（北京 18:40）才有当天日线，盘中这一根来自交易所 / 腾讯实时行情，交易时段每 30 秒刷新",
   "kline.openPage": "在 K 线页打开",
   "kline.pageTitle": "K 线图",

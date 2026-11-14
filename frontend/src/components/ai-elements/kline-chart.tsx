@@ -226,10 +226,19 @@ export async function fetchKlineBars(symbol: string, range: Range): Promise<{ ba
   return { bars: d.data as Bar[], source: d.source || "" };
 }
 
-export type LiveQuote = { bar?: Bar; prev_close?: number; time?: string; trading: boolean; delayed?: boolean; source?: string };
+export type LiveQuote = {
+  bar?: Bar;
+  prev_close?: number;
+  time?: string;
+  trading: boolean;
+  delayed?: boolean;
+  delay_min?: number;
+  source?: string;
+};
 
-/** A 股、港股、美股（字母代码）有盘中实时这一根；指数（^）、期货（=F）、汇率（=X）没有 */
-export const isLiveSymbol = (s: string) => /^(\d{6}\.(SH|SS|SZ)|\d{1,5}\.HK|[A-Z][A-Z0-9-]{0,5}(\.[A-Z])?)$/i.test(s);
+/** 有盘中实时这一根：A 股、港股、美股（字母代码），以及雅虎的指数（^）、汇率（=X）、期货（=F） */
+export const isLiveSymbol = (s: string) =>
+  /^(\d{6}\.(SH|SS|SZ)|\d{1,5}\.HK|[A-Z][A-Z0-9-]{0,5}(\.[A-Z])?|\^[A-Z0-9.-]{1,12}|[A-Z0-9.-]{1,12}=[XF])$/i.test(s);
 
 /** 盘中「今天这一根」（库里收盘后才有当天日线）：交易所 / 腾讯，后端缓存 15 秒 */
 export async function fetchLiveQuote(symbol: string): Promise<LiveQuote | null> {
@@ -640,7 +649,10 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
           {liveShown && live?.time && (
             <span className="mr-3" title={t("kline.liveHint")}>
               <span className={cn("mr-1 inline-block size-1.5 rounded-full align-middle", live.trading ? "bg-red-500" : "bg-muted-foreground")} />
-              {t(live.delayed ? "kline.liveDelayed" : "kline.live")} {live.time.slice(5, 16)}（{live.source}）
+              {live.delayed
+                ? t("kline.liveDelayed").replace("{n}", String(live.delay_min || 15))
+                : t("kline.live")}{" "}
+              {live.time.slice(5, 16)}（{live.source}）
             </span>
           )}
           {t("kline.source")}：{source}

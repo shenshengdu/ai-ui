@@ -199,7 +199,7 @@ export const en = {
   "kline.badSpec": "Invalid chart spec (needs a stock symbol)",
   "kline.source": "Data source",
   "kline.live": "Today (live)",
-  "kline.liveDelayed": "Today (delayed ~15 min)",
+  "kline.liveDelayed": "Today (delayed ~{n} min)",
   "kline.liveHint": "The daily bar is stored after the close; during the session this bar comes from exchange / Tencent quotes, refreshed every 30s",
   "kline.openPage": "Open in chart page",
   "kline.pageTitle": "Charts",
