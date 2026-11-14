@@ -39,11 +39,14 @@ func isFinanceTool(name string) bool {
 	case "finance_stock", "finance_technical", "finance_valuation", "finance_market", "finance_market_news", "finance_decision", "finance_quote", "finance_global_market", "finance_peer_compare", "finance_peer_group_save", "finance_peer_quant", "finance_warmup_status", "finance_account", "finance_judgement", "finance_macro", "finance_company":
 		return true
 	}
+	if isBacktestTool(name) {
+		return true
+	}
 	return false
 }
 
 func financeBuiltInTools() []*Tool {
-	return append(append(append(append(financeBaseTools(), financeQuickTools()...), financeAccountTools()...), financeJudgementTools()...), financeCompanyTools()...)
+	return append(append(append(append(append(financeBaseTools(), financeQuickTools()...), financeAccountTools()...), financeJudgementTools()...), financeCompanyTools()...), financeBacktestTools()...)
 }
 
 func financeBaseTools() []*Tool {

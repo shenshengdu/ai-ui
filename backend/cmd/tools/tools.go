@@ -133,6 +133,8 @@ func ExecuteMCPTool(ctx context.Context, toolCall providers.ToolCall, user, conv
 			return generateImageTool(toolCall.Args, user, convID)
 		case "finance_stock", "finance_technical", "finance_valuation", "finance_market", "finance_market_news", "finance_decision", "finance_peer_compare", "finance_peer_group_save", "finance_peer_quant", "finance_warmup_status", "finance_quote", "finance_global_market", "finance_account", "finance_judgement", "finance_macro", "finance_company":
 			return financeTool(ctx, tool.Name, toolCall.Args)
+		case "finance_backtest_factors", "finance_backtest_run", "finance_backtest_get", "finance_backtest_list":
+			return backtestTool(ctx, tool.Name, toolCall.Args)
 		case "publish_report":
 			return publishReportTool(ctx, toolCall.Args)
 		case "http_request":

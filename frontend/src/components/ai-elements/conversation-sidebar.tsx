@@ -34,6 +34,7 @@ import {
   PinOffIcon,
   SearchIcon,
   CandlestickChartIcon,
+  FlaskConicalIcon,
   SettingsIcon,
   SquarePenIcon,
   SunMoonIcon,
@@ -276,6 +277,13 @@ export const ConversationSidebar = ({
           >
             <CandlestickChartIcon className="size-[18px]" />
           </RailButton>
+          <RailButton
+            label={t("sidebar.backtest")}
+            onClick={() => navigateTo("/backtest")}
+            aria-label={t("sidebar.backtest")}
+          >
+            <FlaskConicalIcon className="size-[18px]" />
+          </RailButton>
           <div className="flex-1" />
           <AccountMenu
             compact
@@ -344,6 +352,11 @@ export const ConversationSidebar = ({
               icon={<CandlestickChartIcon />}
               label={t("sidebar.kline")}
               onClick={() => navigateTo("/kline")}
+            />
+            <NavRow
+              icon={<FlaskConicalIcon />}
+              label={t("sidebar.backtest")}
+              onClick={() => navigateTo("/backtest")}
             />
           </nav>
 

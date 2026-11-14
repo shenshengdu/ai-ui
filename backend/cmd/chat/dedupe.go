@@ -26,7 +26,8 @@ func toolDupKey(tc providers.ToolCall) string {
 // duplicateToolCall：本轮（自上一条真实用户消息起）已成功调用过同一个 finance_* 取数工具（同一只股票）时，
 // 返回提示文字而不再真正执行（保存类工具除外；上一次失败/超时的允许重试）。
 func duplicateToolCall(msgs []providers.SimpleMessage, tc providers.ToolCall) (string, bool) {
-	if !strings.HasPrefix(tc.Name, "finance_") || strings.Contains(tc.Name, "save") {
+	// 回测：每次的策略 / id 不同，查进度也要反复查，不去重
+	if !strings.HasPrefix(tc.Name, "finance_") || strings.Contains(tc.Name, "save") || strings.HasPrefix(tc.Name, "finance_backtest") {
 		return "", false
 	}
 	want := toolDupKey(tc)
