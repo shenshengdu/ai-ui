@@ -3,8 +3,23 @@ import type { Spec } from "./api";
 
 type L = { zh: string; en: string };
 
+export const MARKET: Record<string, L> = {
+  A: { zh: "A 股", en: "China A" },
+  HK: { zh: "港股", en: "Hong Kong" },
+  US: { zh: "美股", en: "US" },
+};
+
+/** 成交额门槛的货币 */
+export const CURRENCY: Record<string, L> = {
+  A: { zh: "元", en: "CNY" },
+  HK: { zh: "港元", en: "HKD" },
+  US: { zh: "美元", en: "USD" },
+};
+
 export const POOL: Record<string, L> = {
   all_a: { zh: "全部 A 股", en: "All A-shares" },
+  all_hk: { zh: "全部港股", en: "All HK stocks" },
+  all_us: { zh: "全部美股（普通股）", en: "All US common stocks" },
   hs300: { zh: "沪深 300", en: "CSI 300" },
   zz500: { zh: "中证 500", en: "CSI 500" },
   zz1000: { zh: "中证 1000", en: "CSI 1000" },
@@ -30,6 +45,11 @@ export const BENCHMARK: Record<string, L> = {
   "000016.SH": { zh: "上证 50", en: "SSE 50" },
   "000001.SH": { zh: "上证指数", en: "SSE Composite" },
   "399006.SZ": { zh: "创业板指", en: "ChiNext" },
+  "HSI.HK": { zh: "恒生指数", en: "Hang Seng Index" },
+  "HSCEI.HK": { zh: "恒生国企指数", en: "HSCEI" },
+  "HSTECH.HK": { zh: "恒生科技指数", en: "Hang Seng TECH" },
+  SPX: { zh: "标普 500", en: "S&P 500" },
+  NDX: { zh: "纳斯达克 100", en: "Nasdaq-100" },
 };
 
 const OP: Record<string, L> = {
@@ -61,8 +81,9 @@ export function rankText(r: NonNullable<Spec["rank"]>[number], name: string, lan
   return `${name}${w}${dir}`;
 }
 
-export function fmtAmount(v: number | undefined, lang: string): string {
+export function fmtAmount(v: number | undefined, lang: string, market = "A"): string {
   if (!v) return "—";
-  if (lang === "zh") return v >= 1e8 ? `${+(v / 1e8).toFixed(2)} 亿` : `${+(v / 1e4).toFixed(0)} 万`;
-  return v >= 1e9 ? `${+(v / 1e9).toFixed(2)}B` : `${+(v / 1e6).toFixed(0)}M`;
+  const cur = label(CURRENCY, market, lang);
+  if (lang === "zh") return (v >= 1e8 ? `${+(v / 1e8).toFixed(2)} 亿` : `${+(v / 1e4).toFixed(0)} 万`) + cur;
+  return (v >= 1e9 ? `${+(v / 1e9).toFixed(2)}B` : `${+(v / 1e6).toFixed(0)}M`) + " " + cur;
 }

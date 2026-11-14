@@ -547,6 +547,8 @@ export const zh: Record<MessageKey, string> = {
   "bt.rename": "改名",
   "bt.deleteTitle": "删除这个回测？",
   "bt.deleteDesc": "将永久删除「{name}」及其结果；排队中的会取消，不会再运行。",
+  "bt.market": "市场",
+  "bt.costsText2": "佣金 {c} · 印花税 买 {sb} / 卖 {s} · 滑点 {sl}",
   "bt.back": "返回",
   "bt.notFound": "没有这个回测",
   "bt.cagr": "年化收益",

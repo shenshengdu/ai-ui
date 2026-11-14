@@ -4,7 +4,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FlaskConicalIcon, Loader2Icon } from "lucide-react";
-import { fetchBacktests, fmtPct, fmtTime, isActive, type BacktestItem } from "./api";
+import { fetchBacktests, fmtPct, fmtTime, isActive, marketOf, type BacktestItem } from "./api";
+import { MARKET, label } from "./labels";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -64,6 +65,15 @@ export function StatusBadge({ b }: { b: Pick<BacktestItem, "status" | "progress"
   );
 }
 
+export function MarketTag({ market }: { market: string }) {
+  const { lang } = useI18n();
+  return (
+    <span className="inline-flex shrink-0 items-center rounded border px-1 text-[10px] leading-4 text-muted-foreground">
+      {label(MARKET, market, lang)}
+    </span>
+  );
+}
+
 export function BacktestList({ items, error, activeId, onPick }: {
   items: BacktestItem[] | null;
   error: string | null;
@@ -107,6 +117,7 @@ export function BacktestList({ items, error, activeId, onPick }: {
                 <StatusBadge b={b} />
               </div>
               <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground tabular-nums">
+                <MarketTag market={marketOf(b)} />
                 <span>{fmtTime(b.created_at)}</span>
                 {b.attempt && b.attempt > 1 ? <span>{t("bt.attempt", { n: b.attempt })}</span> : null}
               </div>

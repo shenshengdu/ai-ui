@@ -20,6 +20,7 @@ export type BacktestSummary = {
 
 export type BacktestItem = {
   id: string;
+  market?: string;
   created_at?: string;
   name: string;
   attempt?: number;
@@ -46,6 +47,7 @@ export type Metrics = {
 
 export type Spec = {
   name?: string;
+  market?: string;
   universe?: { pool?: string; exclude?: string[]; min_avg_amount?: number; industries?: string[] };
   filters?: { factor: string; op: string; value: number | [number, number] }[];
   rank?: { factor: string; weight?: number; order?: string }[];
@@ -54,11 +56,13 @@ export type Spec = {
   weighting?: string;
   period?: [string, string | null];
   benchmark?: string;
-  costs?: { commission?: number; stamp_tax_sell?: number; slippage?: number };
+  costs?: { commission?: number; stamp_tax_buy?: number; stamp_tax_sell?: number; slippage?: number };
 };
 
 export type BacktestResult = {
   as_of?: string;
+  market?: string;
+  warnings?: string[];
   metrics?: {
     strategy?: Metrics;
     benchmark?: Metrics;
@@ -145,10 +149,20 @@ export function fmtNum(v: number | null | undefined, digits = 2): string {
   return v.toFixed(digits);
 }
 
-/** 600519 / sh.600519 → 600519.SH（K 线页的代码格式） */
+/** 回测里的代码 → K 线页的代码：sh.600519 → 600519.SH；hk.00700 → 00700.HK；us.AAPL → AAPL */
 export function platformSymbol(code: string): string {
   const m = /^(sh|sz|bj)\.(\d{6})$/.exec(code);
-  return m ? `${m[2]}.${m[1].toUpperCase()}` : code;
+  if (m) return `${m[2]}.${m[1].toUpperCase()}`;
+  const h = /^hk\.(\w+)$/.exec(code);
+  if (h) return `${h[1]}.HK`;
+  const u = /^us\.(.+)$/.exec(code);
+  if (u) return u[1];
+  return code;
+}
+
+/** 回测的市场：新的存在 spec.market / 列表的 market；旧的没有 = A 股 */
+export function marketOf(b: { market?: string; spec?: { market?: string } }): string {
+  return b.market || b.spec?.market || "A";
 }
 
 /** 回撤曲线：每个点相对之前最高点的跌幅（%） */
