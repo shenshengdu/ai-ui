@@ -544,6 +544,7 @@ export const zh: Record<MessageKey, string> = {
   "bt.status.failed": "失败",
   "bt.ahead": "前面还有 {n} 个",
   "bt.attempt": "第 {n} 次",
+  "bt.rename": "改名",
   "bt.back": "返回",
   "bt.notFound": "没有这个回测",
   "bt.cagr": "年化收益",
