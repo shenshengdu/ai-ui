@@ -120,7 +120,7 @@ func TestLiveHKTigerThenTencent(t *testing.T) {
 				_, _ = w.Write([]byte(`{"status":"success","quotes":{}}`))
 				return
 			}
-			_, _ = w.Write([]byte(`{"status":"success","quotes":{"00700":{"open":400,"high":405,"low":398,"price":403.2,"prev_close":401,"volume":1234567,"time":"2026-11-13 14:29:58","source":"tiger"}}}`))
+			_, _ = w.Write([]byte(`{"status":"success","quotes":{"00700":{"open":400,"high":405,"low":398,"price":403.2,"prev_close":401,"volume":1234567,"time":"2026-11-13 14:29:58","source":"futu"}}}`))
 			return
 		}
 		f := make([]string, 50)
@@ -130,7 +130,7 @@ func TestLiveHKTigerThenTencent(t *testing.T) {
 	t.Setenv("FINANCE_BASE_URL", liveTencentURL[:strings.Index(liveTencentURL, "/qt")]+"/fp")
 	t.Setenv("FINANCE_API_KEY", "k")
 	r := liveCall(t, "0700.HK")
-	if r.Source != "老虎" || *r.Bar.C != 403.2 || *r.Bar.V != 1234567 || r.Delayed || !r.Trading {
+	if r.Source != "富途" || *r.Bar.C != 403.2 || *r.Bar.V != 1234567 || r.Delayed || !r.Trading {
 		t.Fatalf("%+v", r)
 	}
 	tiger = false
@@ -232,5 +232,42 @@ func TestLiveYahooIndexFuturesDelayed(t *testing.T) {
 	}
 	if seen[0] != "/yahoo/%5EGSPC" || seen[1] != "/yahoo/GC=F" {
 		t.Fatalf("%v", seen)
+	}
+}
+
+func TestLiveHKIndexFutuThenYahoo(t *testing.T) {
+	futuUp := true
+	liveSetup(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/fp/api/v1/markets/hk_live":
+			if !futuUp || r.URL.Query().Get("symbols") != "HSI.HK" {
+				_, _ = w.Write([]byte(`{"status":"success","quotes":{}}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"status":"success","quotes":{"HSI":{"open":25000,"high":25100,"low":24900,"price":25050,"prev_close":24980,"volume":1,"time":"2026-11-13 14:29:58","source":"futu"}}}`))
+		case strings.HasPrefix(r.URL.Path, "/yahoo/"):
+			now := bj1430.Unix()
+			_, _ = w.Write([]byte(yahooBody(24990, now-900, now-3600, now+3600, 15)))
+		default:
+			http.Error(w, "x", 404)
+		}
+	}, bj1430)
+	t.Setenv("FINANCE_BASE_URL", liveTencentURL[:strings.Index(liveTencentURL, "/qt")]+"/fp")
+	t.Setenv("FINANCE_API_KEY", "k")
+	for _, sym := range []string{"HSI.HK", "^HSI"} {
+		r := liveCall(t, sym)
+		if r.Source != "富途" || *r.Bar.C != 25050 || !r.Trading || r.Delayed {
+			t.Fatalf("%s %+v", sym, r)
+		}
+	}
+	futuUp = false
+	liveCacheMu.Lock()
+	liveCache = map[string]struct {
+		r  liveResp
+		at time.Time
+	}{}
+	liveCacheMu.Unlock()
+	if r := liveCall(t, "^HSI"); r.Source != "雅虎" || !r.Delayed || r.DelayMin != 15 {
+		t.Fatalf("富途没有时 ^HSI 退回雅虎：%+v", r)
 	}
 }

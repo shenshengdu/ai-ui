@@ -18,7 +18,7 @@ import (
 // 盘中「今天这一根」K 线：库里的日线要收盘后（北京 18:40）才有当天的，K 线页用这个临时拼上最后一根（不写库）。
 // GET /api/tools/finance/live?symbol=002594.SZ
 // A 股：交易所网站为主（深市 szse.cn、沪市 yunhq.sse.com.cn），失败退回腾讯；
-// 港股：盘中老虎实时（金融平台 /api/v1/markets/hk_live，每只最多 3 分钟刷新一次），拿不到用腾讯（盘中延迟约 15 分钟，delayed=true）；
+// 港股：金融平台 /api/v1/markets/hk_live（富途实时优先，再老虎），拿不到用腾讯（盘中延迟约 15 分钟，delayed=true）；
 // 美股：金融平台 /api/v1/markets/us_live（盘中 FMP 名单内 / Alpaca 现价 + Finnhub 开高低；收盘后 Finnhub）。
 // 这些请求从本机发出，不占阿里云每日收盘同步（腾讯）的请求额度。
 
@@ -32,7 +32,10 @@ var (
 )
 
 // 6 位.SH/SZ（A 股）| 1–5 位.HK（港股）| 美股字母代码 | 雅虎代码：^ 开头的指数、=X 汇率、=F 期货
-var liveSymbolRe = regexp.MustCompile(`^(\d{6})\.(SH|SS|SZ)$|^(\d{1,5})\.HK$|^([A-Z][A-Z0-9\-]{0,5}(\.[A-Z])?)$|^(\^[A-Z0-9.\-]{1,12}|[A-Z0-9.\-]{1,12}=[XF])$`)
+var liveSymbolRe = regexp.MustCompile(`^(\d{6})\.(SH|SS|SZ)$|^(\d{1,5})\.HK$|^([A-Z][A-Z0-9\-]{0,5}(\.[A-Z])?)$|^(\^[A-Z0-9.\-]{1,12}|[A-Z0-9.\-]{1,12}=[XF])$|^(HSI|HSCEI|HSTECH)\.HK$`)
+
+// 港股指数：富途（经金融平台 hk_live）实时；雅虎的 ^HSI 等延迟 15 分钟，排在后面
+var liveHKIndexYahoo = map[string]string{"^HSI": "HSI", "^HSCE": "HSCEI"}
 
 const liveTTL = 15 * time.Second
 
@@ -113,7 +116,17 @@ func liveLookup(ctx context.Context, symbol string, m []string) liveResp {
 	hk := m[3] != ""
 	us := m[4] != ""
 	yahoo := m[6] != ""
-	if yahoo { // 指数 / 汇率 / 期货：只有雅虎
+	hkIndex := m[7]
+	if hkIndex == "" && yahoo {
+		hkIndex = liveHKIndexYahoo[m[6]]
+	}
+	if hkIndex != "" { // 港股指数：富途实时，雅虎（有的话）兜底
+		hk = true
+		srcs = []src{{"富途", func() (*liveQuote, error) { return liveTiger(ctx, hkIndex) }}}
+		if yahoo {
+			srcs = append(srcs, src{"雅虎", func() (*liveQuote, error) { return liveYahoo(ctx, m[6]) }})
+		}
+	} else if yahoo { // 指数 / 汇率 / 期货：只有雅虎
 		srcs = []src{{"雅虎", func() (*liveQuote, error) { return liveYahoo(ctx, m[6]) }}}
 	} else if us { // 美股：雅虎优先（全部美股、全市场成交量、不要密钥），不行再金融平台（FMP / Alpaca+Finnhub）
 		srcs = []src{{"雅虎", func() (*liveQuote, error) { return liveYahoo(ctx, m[4]) }},
@@ -121,7 +134,7 @@ func liveLookup(ctx context.Context, symbol string, m []string) liveResp {
 	} else if hk {
 		code := fmt.Sprintf("%05s", m[3])
 		code = strings.ReplaceAll(code, " ", "0")
-		srcs = []src{{"老虎", func() (*liveQuote, error) { return liveTiger(ctx, code) }},
+		srcs = []src{{"富途", func() (*liveQuote, error) { return liveTiger(ctx, code) }},
 			{"腾讯", func() (*liveQuote, error) { return liveTencent(ctx, "hk"+code, true) }}}
 	} else {
 		code, ex := m[1], m[2]
@@ -337,24 +350,24 @@ func livePlatform(ctx context.Context, path string, out any) error {
 	return json.NewDecoder(io.LimitReader(resp.Body, 256<<10)).Decode(out)
 }
 
-// 港股盘中：老虎实时（金融平台 hk_live；不在交易时段 / 额度用完 / 出错 → 没有这只 → 换腾讯）
+// 港股：金融平台 hk_live（先富途开放平台：实时、不分交易时段；再老虎：只在交易时段）；都没有 → 换腾讯
 func liveTiger(ctx context.Context, five string) (*liveQuote, error) {
-	if !liveSession(liveNow(), true) {
-		return nil, fmt.Errorf("不在港股交易时段")
-	}
 	var d struct {
 		Quotes map[string]struct {
-			O    *float64 `json:"open"`
-			H    *float64 `json:"high"`
-			L    *float64 `json:"low"`
-			P    *float64 `json:"price"`
-			PC   *float64 `json:"prev_close"`
-			V    *float64 `json:"volume"`
-			Time string   `json:"time"`
+			O      *float64 `json:"open"`
+			H      *float64 `json:"high"`
+			L      *float64 `json:"low"`
+			P      *float64 `json:"price"`
+			PC     *float64 `json:"prev_close"`
+			V      *float64 `json:"volume"`
+			Time   string   `json:"time"`
+			Source string   `json:"source"`
 		} `json:"quotes"`
 	}
 	sym := strings.TrimLeft(five, "0")
-	if len(sym) < 4 {
+	if five != "" && (five[0] < '0' || five[0] > '9') { // 港股指数：HSI / HSCEI / HSTECH
+		sym = five
+	} else if len(sym) < 4 {
 		sym = fmt.Sprintf("%04s", sym)
 		sym = strings.ReplaceAll(sym, " ", "0")
 	}
@@ -376,6 +389,7 @@ func liveTiger(ctx context.Context, five string) (*liveQuote, error) {
 	if out.open <= 0 {
 		out.open = out.last
 	}
+	out.srcName = map[string]string{"futu": "富途", "tiger": "老虎"}[q.Source]
 	return out, nil
 }
 

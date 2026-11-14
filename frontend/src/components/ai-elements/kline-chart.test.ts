@@ -111,6 +111,8 @@ describe("盘中实时这一根", () => {
     expect(isLiveSymbol("^N225")).toBe(true);
     expect(isLiveSymbol("GC=F")).toBe(true);
     expect(isLiveSymbol("CNY=X")).toBe(true);
+    expect(isLiveSymbol("HSI.HK")).toBe(true);
+    expect(isLiveSymbol("HSTECH.HK")).toBe(true);
     expect(isLiveSymbol("600519")).toBe(false);
   });
 });
