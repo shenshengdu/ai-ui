@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App.tsx";
 import { KlinePage } from "./components/kline/KlinePage.tsx";
 import { ComparePage } from "./components/compare/ComparePage.tsx";
+import { BacktestListPage, BacktestPage } from "@/components/backtest/BacktestPage";
 import "./globals.css";
 import { ThemeProvider } from "./components/theme-provider.tsx";
 import { AuthProvider } from "./hooks/useAuth.tsx";
@@ -87,6 +88,8 @@ const AppTree = (
                 <Route path="/c/:convId" element={<App />} />
                 <Route path="/kline" element={<KlinePage />} />
                 <Route path="/compare" element={<ComparePage />} />
+                <Route path="/backtest" element={<BacktestListPage />} />
+                <Route path="/backtest/:id" element={<BacktestPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </SettingsDataProvider>

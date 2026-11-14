@@ -14,6 +14,7 @@ import {
   type ChatInterfaceHandle,
 } from "@/components/ChatInterface";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
+import { BacktestSidebar } from "@/components/backtest/BacktestSidebar";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useConversations } from "@/hooks/useConversations";
 import { useAuth } from "@/hooks/useAuth";
@@ -486,6 +487,8 @@ function App() {
           }
         />
       </main>
+
+      <BacktestSidebar enabled={isAuthenticated} />
 
       <SearchChatsDialog
         open={searchOpen}

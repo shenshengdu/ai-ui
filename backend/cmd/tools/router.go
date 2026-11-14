@@ -19,6 +19,8 @@ func Handler() http.Handler {
 	mux.HandleFunc("GET /finance/company", financeCompany)
 	mux.HandleFunc("GET /finance/markets", financeMarkets)
 	mux.HandleFunc("GET /finance/live", financeLive)
+	mux.HandleFunc("GET /finance/backtests", financeBacktestHTTP)
+	mux.HandleFunc("GET /finance/backtest", financeBacktestHTTP)
 	// mux.HandleFunc("GET /{id}", GetTool)
 	// mux.HandleFunc("POST /save", SaveTool)
 	// mux.HandleFunc("DELETE /delete/{id}", DeleteTool)
