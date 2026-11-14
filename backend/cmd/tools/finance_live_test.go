@@ -2,6 +2,7 @@ package tools
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,8 +14,8 @@ func liveSetup(t *testing.T, h http.HandlerFunc, now time.Time) *int {
 	calls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls++; h(w, r) }))
 	t.Cleanup(srv.Close)
-	oldZ, oldS, oldT, oldN := liveSZSEURL, liveSSEURL, liveTencentURL, liveNow
-	liveSZSEURL, liveSSEURL, liveTencentURL = srv.URL+"/szse?code=", srv.URL+"/sse/", srv.URL+"/qt?q="
+	oldZ, oldS, oldT, oldN, oldY := liveSZSEURL, liveSSEURL, liveTencentURL, liveNow, liveYahooURL
+	liveSZSEURL, liveSSEURL, liveTencentURL, liveYahooURL = srv.URL+"/szse?code=", srv.URL+"/sse/", srv.URL+"/qt?q=", srv.URL+"/yahoo/"
 	liveNow = func() time.Time { return now }
 	liveCacheMu.Lock()
 	liveCache = map[string]struct {
@@ -22,7 +23,7 @@ func liveSetup(t *testing.T, h http.HandlerFunc, now time.Time) *int {
 		at time.Time
 	}{}
 	liveCacheMu.Unlock()
-	t.Cleanup(func() { liveSZSEURL, liveSSEURL, liveTencentURL, liveNow = oldZ, oldS, oldT, oldN })
+	t.Cleanup(func() { liveSZSEURL, liveSSEURL, liveTencentURL, liveNow, liveYahooURL = oldZ, oldS, oldT, oldN, oldY })
 	return &calls
 }
 
@@ -160,5 +161,76 @@ func TestLiveUS(t *testing.T) {
 	if r.Status != "success" || r.Source != "Alpaca+Finnhub" || r.Bar.V != nil || *r.Bar.C != 120.5 || !r.Trading ||
 		r.Time != "2026-11-13 10:37:59" || r.Bar.T != "2026-11-13" {
 		t.Fatalf("%+v", r)
+	}
+}
+
+func yahooBody(price float64, ts, start, end int64, delayed int) string {
+	return fmt.Sprintf(`{"chart":{"result":[{"meta":{"symbol":"X","regularMarketPrice":%v,"regularMarketDayHigh":360.83,"regularMarketDayLow":355.755,`+
+		`"regularMarketVolume":40027467,"chartPreviousClose":354.88,"regularMarketTime":%d,"gmtoffset":-18000,"exchangeDataDelayedBy":%d,`+
+		`"currentTradingPeriod":{"regular":{"start":%d,"end":%d}}},"indicators":{"quote":[{"open":[357.71]}]}}]}}`, price, ts, delayed, start, end)
+}
+
+func TestLiveYahooUSFirstThenPlatform(t *testing.T) {
+	// 美东 2026-11-13 10:38（UTC 15:38）
+	now := time.Date(2026, 11, 13, 15, 38, 0, 0, time.UTC)
+	start, end := time.Date(2026, 11, 13, 14, 30, 0, 0, time.UTC).Unix(), time.Date(2026, 11, 13, 21, 0, 0, 0, time.UTC).Unix()
+	yahooUp := true
+	plat := 0
+	liveSetup(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/yahoo/"):
+			if !yahooUp {
+				http.Error(w, "x", 429)
+				return
+			}
+			_, _ = w.Write([]byte(yahooBody(358.74, now.Unix()-5, start, end, 0)))
+		case r.URL.Path == "/fp/api/v1/markets/us_live":
+			plat++
+			_, _ = w.Write([]byte(`{"status":"success","trading":true,"quotes":{"AAPL":{"date":"2026-11-13","time":"10:37:59","open":357,"high":360,"low":357,"price":358.7,"prev_close":354.88,"volume":10212487,"source":"fmp"}}}`))
+		default:
+			http.Error(w, "x", 404)
+		}
+	}, now)
+	t.Setenv("FINANCE_BASE_URL", liveTencentURL[:strings.Index(liveTencentURL, "/qt")]+"/fp")
+	t.Setenv("FINANCE_API_KEY", "k")
+	r := liveCall(t, "AAPL")
+	if r.Source != "雅虎" || *r.Bar.C != 358.74 || *r.Bar.O != 357.71 || *r.Bar.V != 40027467 || !r.Trading || r.Delayed ||
+		r.Bar.T != "2026-11-13" || r.Time != "2026-11-13 10:37:55" || plat != 0 {
+		t.Fatalf("%+v", r)
+	}
+	yahooUp = false
+	liveCacheMu.Lock()
+	liveCache = map[string]struct {
+		r  liveResp
+		at time.Time
+	}{}
+	liveCacheMu.Unlock()
+	r = liveCall(t, "AAPL")
+	if r.Source != "FMP" || plat != 1 || !r.Trading {
+		t.Fatalf("雅虎挂了应该走平台：%+v", r)
+	}
+}
+
+func TestLiveYahooIndexFuturesDelayed(t *testing.T) {
+	now := time.Date(2026, 11, 13, 15, 38, 0, 0, time.UTC)
+	start, end := time.Date(2026, 11, 13, 14, 30, 0, 0, time.UTC).Unix(), time.Date(2026, 11, 13, 21, 0, 0, 0, time.UTC).Unix()
+	var seen []string
+	liveSetup(t, func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.URL.EscapedPath())
+		delay := 0
+		if strings.Contains(r.URL.EscapedPath(), "GC") {
+			delay = 10
+		}
+		_, _ = w.Write([]byte(yahooBody(4100, now.Unix()-600, start, end, delay)))
+	}, now)
+	if r := liveCall(t, "^GSPC"); r.Source != "雅虎" || !r.Trading || r.Delayed {
+		t.Fatalf("%+v", r)
+	}
+	r := liveCall(t, "GC=F")
+	if !r.Delayed || r.DelayMin != 10 || !r.Trading {
+		t.Fatalf("%+v", r)
+	}
+	if seen[0] != "/yahoo/%5EGSPC" || seen[1] != "/yahoo/GC=F" {
+		t.Fatalf("%v", seen)
 	}
 }

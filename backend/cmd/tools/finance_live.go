@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strconv"
@@ -25,11 +26,13 @@ var (
 	liveSZSEURL    = "https://www.szse.cn/api/market/ssjjhq/getTimeData?marketId=1&code="
 	liveSSEURL     = "http://yunhq.sse.com.cn:32041/v1/sh1/snap/"
 	liveTencentURL = "https://qt.gtimg.cn/q="
+	liveYahooURL   = "https://query1.finance.yahoo.com/v8/finance/chart/"
 	liveHTTPClient = &http.Client{Timeout: 8 * time.Second}
 	liveNow        = time.Now
 )
 
-var liveSymbolRe = regexp.MustCompile(`^(\d{6})\.(SH|SS|SZ)$|^(\d{1,5})\.HK$|^([A-Z][A-Z0-9\-]{0,5}(\.[A-Z])?)$`)
+// 6 位.SH/SZ（A 股）| 1–5 位.HK（港股）| 美股字母代码 | 雅虎代码：^ 开头的指数、=X 汇率、=F 期货
+var liveSymbolRe = regexp.MustCompile(`^(\d{6})\.(SH|SS|SZ)$|^(\d{1,5})\.HK$|^([A-Z][A-Z0-9\-]{0,5}(\.[A-Z])?)$|^(\^[A-Z0-9.\-]{1,12}|[A-Z0-9.\-]{1,12}=[XF])$`)
 
 const liveTTL = 15 * time.Second
 
@@ -39,17 +42,21 @@ type liveResp struct {
 	Source    string    `json:"source,omitempty"`
 	Bar       *klineBar `json:"bar,omitempty"`
 	PrevClose *float64  `json:"prev_close,omitempty"`
-	Time      string    `json:"time,omitempty"`    // 行情时间（北京）
-	Trading   bool      `json:"trading"`           // 正在交易时段、而且是今天的行情：前端继续定时刷新
-	Delayed   bool      `json:"delayed,omitempty"` // 盘中但用的是延迟行情（港股腾讯约 15 分钟）
+	Time      string    `json:"time,omitempty"`      // 行情时间（北京）
+	Trading   bool      `json:"trading"`             // 正在交易时段、而且是今天的行情：前端继续定时刷新
+	Delayed   bool      `json:"delayed,omitempty"`   // 盘中但用的是延迟行情（港股腾讯约 15 分钟、雅虎的期货 / 海外指数）
+	DelayMin  int       `json:"delay_min,omitempty"` // 延迟多少分钟
 	Error     string    `json:"error,omitempty"`
 }
 
 type liveQuote struct {
 	date, clock                    string // 2026-11-13, 14:59:58
 	open, high, low, last, prev, v float64
-	noVol                          bool // 没有可靠的成交量（美股名单外）：不画
-	trading                        *bool
+	noVol                          bool   // 没有可靠的成交量（美股名单外）：不画
+	trading                        *bool  // 数据源自己说在不在交易时段（美股、雅虎）
+	today                          string // 那个市场当地的今天（和 date 比：是不是今天的行情）
+	srcName                        string // 数据源名（一个 src 里可能是几家之一）
+	delayMin                       int
 }
 
 var (
@@ -105,8 +112,12 @@ func liveLookup(ctx context.Context, symbol string, m []string) liveResp {
 	var srcs []src
 	hk := m[3] != ""
 	us := m[4] != ""
-	if us {
-		srcs = []src{{"", func() (*liveQuote, error) { return liveUS(ctx, m[4]) }}}
+	yahoo := m[6] != ""
+	if yahoo { // 指数 / 汇率 / 期货：只有雅虎
+		srcs = []src{{"雅虎", func() (*liveQuote, error) { return liveYahoo(ctx, m[6]) }}}
+	} else if us { // 美股：雅虎优先（全部美股、全市场成交量、不要密钥），不行再金融平台（FMP / Alpaca+Finnhub）
+		srcs = []src{{"雅虎", func() (*liveQuote, error) { return liveYahoo(ctx, m[4]) }},
+			{"", func() (*liveQuote, error) { return liveUS(ctx, m[4]) }}}
 	} else if hk {
 		code := fmt.Sprintf("%05s", m[3])
 		code = strings.ReplaceAll(code, " ", "0")
@@ -138,18 +149,23 @@ func liveLookup(ctx context.Context, symbol string, m []string) liveResp {
 			vp = &v
 		}
 		name := s.name
+		if q.srcName != "" {
+			name = q.srcName
+		}
 		trading := false
-		if us {
-			name = q.clock[9:] // liveUS 把来源放在 clock 后面
-			q.clock = q.clock[:8]
-			trading = q.trading != nil && *q.trading && q.date == liveNow().In(etZone).Format("2006-01-02")
+		if q.trading != nil {
+			trading = *q.trading && q.date == q.today
 		} else {
 			trading = q.date == liveNow().In(bjZone).Format("2006-01-02") && liveSession(liveNow(), hk)
+		}
+		delay := q.delayMin
+		if hk && name == "腾讯" {
+			delay = 15
 		}
 		return liveResp{Status: "success", Symbol: symbol, Source: name,
 			Bar:       &klineBar{T: q.date, O: &o, H: &h, L: &l, C: &c, V: vp},
 			PrevClose: &p, Time: q.date + " " + q.clock,
-			Trading: trading, Delayed: hk && name == "腾讯" && trading}
+			Trading: trading, Delayed: delay > 0 && trading, DelayMin: delay}
 	}
 	msg := "实时行情取不到"
 	if lastErr != nil {
@@ -363,7 +379,7 @@ func liveTiger(ctx context.Context, five string) (*liveQuote, error) {
 	return out, nil
 }
 
-// 美股：金融平台 us_live（来源名放在 clock 后面带回去：「10:37:59 fmp」）
+// 美股：金融平台 us_live（FMP 名单内 / Alpaca 现价 + Finnhub 开高低；收盘后 Finnhub）
 func liveUS(ctx context.Context, sym string) (*liveQuote, error) {
 	var d struct {
 		Trading bool `json:"trading"`
@@ -386,10 +402,99 @@ func liveUS(ctx context.Context, sym string) (*liveQuote, error) {
 		src = q.Source
 	}
 	t := d.Trading
-	out := &liveQuote{date: q.Date, clock: q.Time[:8] + " " + src, open: q.Open, high: q.High, low: q.Low, last: q.Price,
-		prev: q.PrevClose, noVol: q.Volume == nil, trading: &t}
+	out := &liveQuote{date: q.Date, clock: q.Time[:8], open: q.Open, high: q.High, low: q.Low, last: q.Price,
+		prev: q.PrevClose, noVol: q.Volume == nil, trading: &t, srcName: src, today: liveNow().In(etZone).Format("2006-01-02")}
 	if q.Volume != nil {
 		out.v = *q.Volume
 	}
 	return out, nil
+}
+
+// 雅虎 chart：meta 里有现价、当天高低、成交量、行情时间、交易时段、延迟分钟数；开盘价在 indicators.quote[0].open。
+// 实测（雅虎官方说明）：美股、美股指数、汇率是即时的；港股 15 分钟、期货 10–30 分钟、A 股 30 分钟
+func liveYahoo(ctx context.Context, sym string) (*liveQuote, error) {
+	b, err := liveGet(ctx, liveYahooURL+url.PathEscape(sym)+"?interval=1d&range=1d", "")
+	if err != nil {
+		return nil, err
+	}
+	var d struct {
+		Chart struct {
+			Result []struct {
+				Meta struct {
+					Price      float64 `json:"regularMarketPrice"`
+					High       float64 `json:"regularMarketDayHigh"`
+					Low        float64 `json:"regularMarketDayLow"`
+					Volume     float64 `json:"regularMarketVolume"`
+					Prev       float64 `json:"chartPreviousClose"`
+					PrevClose  float64 `json:"previousClose"`
+					Time       int64   `json:"regularMarketTime"`
+					GMTOffset  int64   `json:"gmtoffset"`
+					DelayedBy  int     `json:"exchangeDataDelayedBy"`
+					TradingPer struct {
+						Regular struct {
+							Start int64 `json:"start"`
+							End   int64 `json:"end"`
+						} `json:"regular"`
+					} `json:"currentTradingPeriod"`
+				} `json:"meta"`
+				Indicators struct {
+					Quote []struct {
+						Open []*float64 `json:"open"`
+					} `json:"quote"`
+				} `json:"indicators"`
+			} `json:"result"`
+		} `json:"chart"`
+	}
+	if err := json.Unmarshal(b, &d); err != nil || len(d.Chart.Result) == 0 {
+		return nil, fmt.Errorf("雅虎返回格式不对")
+	}
+	r := d.Chart.Result[0]
+	m := r.Meta
+	if m.Price <= 0 || m.Time == 0 {
+		return nil, fmt.Errorf("雅虎没有这只的行情")
+	}
+	open := 0.0
+	if q := r.Indicators.Quote; len(q) > 0 {
+		for i := len(q[0].Open) - 1; i >= 0; i-- {
+			if q[0].Open[i] != nil && *q[0].Open[i] > 0 {
+				open = *q[0].Open[i]
+				break
+			}
+		}
+	}
+	if open <= 0 {
+		open = m.Price
+	}
+	local := func(t int64) time.Time { return time.Unix(t+m.GMTOffset, 0).UTC() }
+	lt := local(m.Time)
+	now := liveNow().Unix()
+	trading := m.TradingPer.Regular.Start > 0 && now >= m.TradingPer.Regular.Start && now < m.TradingPer.Regular.End+300
+	prev := m.Prev
+	if m.PrevClose > 0 {
+		prev = m.PrevClose
+	}
+	hi, lo := m.High, m.Low
+	if hi <= 0 || hi < m.Price {
+		hi = maxF(m.Price, open)
+	}
+	if lo <= 0 || lo > m.Price {
+		lo = minF(m.Price, open)
+	}
+	return &liveQuote{date: lt.Format("2006-01-02"), clock: lt.Format("15:04:05"), open: open, high: hi, low: lo, last: m.Price,
+		prev: prev, v: m.Volume, noVol: m.Volume <= 0, trading: &trading, today: local(now).Format("2006-01-02"),
+		srcName: "雅虎", delayMin: m.DelayedBy}, nil
+}
+
+func maxF(a, b float64) float64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func minF(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
 }
