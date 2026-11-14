@@ -5,8 +5,9 @@
  */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeftIcon, CheckIcon, FlaskConicalIcon, Loader2Icon, PencilIcon, XIcon } from "lucide-react";
-import { drawdown, fetchBacktest, fmtNum, fmtPct, isActive, platformSymbol, renameBacktest, type Backtest, type Metrics } from "./api";
+import { ArrowLeftIcon, CheckIcon, FlaskConicalIcon, Loader2Icon, PencilIcon, Trash2Icon, XIcon } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { deleteBacktest, drawdown, fetchBacktest, fmtNum, fmtPct, isActive, platformSymbol, renameBacktest, type Backtest, type Metrics } from "./api";
 import { BacktestList, StatusBadge, signClass, useBacktests } from "./BacktestList";
 import { LineChart } from "./LineChart";
 import { BENCHMARK, EXCLUDE, POOL, REBALANCE, filterText, fmtAmount, label, rankText } from "./labels";
@@ -86,6 +87,9 @@ export function BacktestPage() {
   const { t } = useI18n();
   const [bt, setBt] = useState<Backtest | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const [delError, setDelError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     let stop = false;
@@ -132,7 +136,42 @@ export function BacktestPage() {
             t("bt.title")
           )
         }
-        right={bt ? <StatusBadge b={bt} /> : null}
+        right={
+          bt ? (
+            <>
+              <StatusBadge b={bt} />
+              {bt.status !== "running" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDelError(null);
+                    setConfirmDel(true);
+                  }}
+                  title={t("common.delete")}
+                  aria-label={t("common.delete")}
+                  className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-destructive"
+                >
+                  <Trash2Icon className="size-4" />
+                </button>
+              )}
+            </>
+          ) : null
+        }
+      />
+      {delError && <div className="border-b bg-destructive/5 px-4 py-2 text-sm text-destructive">{delError}</div>}
+      <ConfirmDialog
+        open={confirmDel}
+        onOpenChange={setConfirmDel}
+        title={t("bt.deleteTitle")}
+        description={t("bt.deleteDesc", { name: bt?.name ?? "" })}
+        confirmLabel={t("common.delete")}
+        destructive
+        onConfirm={() => {
+          if (!bt) return;
+          deleteBacktest(bt.id)
+            .then(() => navigate("/backtest", { replace: true }))
+            .catch((e) => setDelError(e instanceof Error ? e.message : String(e)));
+        }}
       />
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-5xl flex-col gap-3 p-3 sm:p-4">

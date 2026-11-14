@@ -186,3 +186,32 @@ func TestBacktestRename(t *testing.T) {
 		t.Fatalf("404: %d %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestBacktestDeleteHTTP(t *testing.T) {
+	backtestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("method %s", r.Method)
+		}
+		if r.URL.Path == "/api/v1/backtest/0123456789ab" {
+			w.WriteHeader(409)
+			_, _ = w.Write([]byte(`{"detail":"正在运行，跑完再删"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"status":"success","id":"abcdef012345","deleted":true}`))
+	})
+	rec := httptest.NewRecorder()
+	financeBacktestDeleteHTTP(rec, httptest.NewRequest("POST", "/finance/backtest/delete", strings.NewReader(`{"id":"abcdef012345"}`)))
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"deleted":true`) {
+		t.Fatalf("ok: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	financeBacktestDeleteHTTP(rec, httptest.NewRequest("POST", "/finance/backtest/delete", strings.NewReader(`{"id":"0123456789ab"}`)))
+	if rec.Code != 409 || !strings.Contains(rec.Body.String(), "正在运行") {
+		t.Fatalf("running: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	financeBacktestDeleteHTTP(rec, httptest.NewRequest("POST", "/finance/backtest/delete", strings.NewReader(`{"id":"../x"}`)))
+	if rec.Code != 400 {
+		t.Fatalf("bad id: %d", rec.Code)
+	}
+}
