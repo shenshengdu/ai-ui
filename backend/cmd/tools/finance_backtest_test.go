@@ -58,10 +58,10 @@ func TestBacktestRunWaitsForDone(t *testing.T) {
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
 	})
-	if out := backtestTool(context.Background(), "finance_backtest_run", `{"spec":{"hold":20},"user_confirmed":true}`); !strings.Contains(out.Content, "spec.name 必填") {
+	if out := backtestTool(context.Background(), "finance_backtest_run", `{"spec":{"market":"A","hold":20},"user_confirmed":true}`); !strings.Contains(out.Content, "spec.name 必填") {
 		t.Fatalf("name required: %s", out.Content)
 	}
-	out := backtestTool(context.Background(), "finance_backtest_run", `{"spec":{"name":"低估值"},"user_confirmed":true}`)
+	out := backtestTool(context.Background(), "finance_backtest_run", `{"spec":{"market":"A","name":"低估值"},"user_confirmed":true}`)
 	for _, want := range []string{`"cagr":12.3`, `"page":"/backtest/abcdef012345"`, `共 2 期持仓`, `"cagr_median":2`} {
 		if !strings.Contains(out.Content, want) {
 			t.Fatalf("missing %s in %s", want, out.Content)
@@ -88,12 +88,12 @@ func TestBacktestRunTimeoutAndSpecError(t *testing.T) {
 		}
 		_, _ = w.Write([]byte(`{"status":"success","backtest":{"id":"abcdef012345","status":"queued","ahead":2}}`))
 	})
-	out := backtestTool(context.Background(), "finance_backtest_run", `{"spec":{"name":"x","rank":[{"factor":"foo"}]},"user_confirmed":true}`)
+	out := backtestTool(context.Background(), "finance_backtest_run", `{"spec":{"market":"HK","name":"x","rank":[{"factor":"foo"}]},"user_confirmed":true}`)
 	if !strings.Contains(out.Content, "因子不认识：foo") {
 		t.Fatalf("got %s", out.Content)
 	}
 	bad = false
-	out = backtestTool(context.Background(), "finance_backtest_run", `{"spec":{"name":"x"},"user_confirmed":true}`)
+	out = backtestTool(context.Background(), "finance_backtest_run", `{"spec":{"market":"US","name":"x"},"user_confirmed":true}`)
 	if !strings.Contains(out.Content, "还没跑完") || !strings.Contains(out.Content, `"ahead":2`) {
 		t.Fatalf("got %s", out.Content)
 	}
@@ -213,5 +213,22 @@ func TestBacktestDeleteHTTP(t *testing.T) {
 	financeBacktestDeleteHTTP(rec, httptest.NewRequest("POST", "/finance/backtest/delete", strings.NewReader(`{"id":"../x"}`)))
 	if rec.Code != 400 {
 		t.Fatalf("bad id: %d", rec.Code)
+	}
+}
+
+func TestBacktestMarket(t *testing.T) {
+	var gotQuery string
+	backtestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		_, _ = w.Write([]byte(`{"status":"success","market":"HK","pools":["all_hk"]}`))
+	})
+	if out := backtestTool(context.Background(), "finance_backtest_factors", `{"market":"hk"}`); !strings.Contains(out.Content, "all_hk") || gotQuery != "market=HK" {
+		t.Fatalf("factors: %s %s", gotQuery, out.Content)
+	}
+	if out := backtestTool(context.Background(), "finance_backtest_factors", `{"market":"JP"}`); !strings.Contains(out.Content, "market 只能是") {
+		t.Fatalf("bad market: %s", out.Content)
+	}
+	if out := backtestTool(context.Background(), "finance_backtest_run", `{"spec":{"name":"x"},"user_confirmed":true}`); !strings.Contains(out.Content, "spec.market 必填") {
+		t.Fatalf("market required: %s", out.Content)
 	}
 }

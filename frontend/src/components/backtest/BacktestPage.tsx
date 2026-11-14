@@ -7,10 +7,10 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeftIcon, CheckIcon, FlaskConicalIcon, Loader2Icon, PencilIcon, Trash2Icon, XIcon } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { deleteBacktest, drawdown, fetchBacktest, fmtNum, fmtPct, isActive, platformSymbol, renameBacktest, type Backtest, type Metrics } from "./api";
-import { BacktestList, StatusBadge, signClass, useBacktests } from "./BacktestList";
+import { deleteBacktest, drawdown, fetchBacktest, marketOf, fmtNum, fmtPct, isActive, platformSymbol, renameBacktest, type Backtest, type Metrics } from "./api";
+import { BacktestList, MarketTag, StatusBadge, signClass, useBacktests } from "./BacktestList";
 import { LineChart } from "./LineChart";
-import { BENCHMARK, EXCLUDE, POOL, REBALANCE, filterText, fmtAmount, label, rankText } from "./labels";
+import { BENCHMARK, EXCLUDE, MARKET, POOL, REBALANCE, filterText, fmtAmount, label, rankText } from "./labels";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -139,6 +139,7 @@ export function BacktestPage() {
         right={
           bt ? (
             <>
+              <MarketTag market={marketOf(bt)} />
               <StatusBadge b={bt} />
               {bt.status !== "running" && (
                 <button
@@ -304,6 +305,13 @@ function Result({ bt }: { bt: Backtest }) {
 
   return (
     <>
+      {!!r.warnings?.length && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
+          {r.warnings.map((w) => (
+            <div key={w}>⚠️ {w}</div>
+          ))}
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Stat k={t("bt.cagr")} v={fmtPct(s.cagr)} cls={signClass(s.cagr)} sub={`${t("bt.total")} ${fmtPct(s.total_return, 0)}`} />
         <Stat k={t("bt.excess")} v={fmtPct(m.annual_excess, 1, true)} cls={signClass(m.annual_excess)} sub={`${benchName} ${fmtPct(b.cagr)}`} />
@@ -622,15 +630,17 @@ function SpecCard({ bt }: { bt: Backtest }) {
   const info = bt.result?.factor_info || {};
   const fname = (f: string) => (info[f] ? `${info[f]}（${f}）` : f);
   const u = s.universe || {};
+  const mk = marketOf(bt);
   const uni = [
     label(POOL, u.pool, lang),
     ...(u.exclude?.length ? [(lang === "zh" ? "排除 " : "excl. ") + u.exclude.map((x) => label(EXCLUDE, x, lang)).join(lang === "zh" ? "、" : ", ")] : []),
-    ...(u.min_avg_amount ? [t("bt.minAmount", { v: fmtAmount(u.min_avg_amount, lang) })] : []),
+    ...(u.min_avg_amount ? [t("bt.minAmount", { v: fmtAmount(u.min_avg_amount, lang, mk) })] : []),
     ...(u.industries?.length ? [t("bt.industries", { v: u.industries.join(lang === "zh" ? "、" : ", ") })] : []),
   ].join(" · ");
   const c = s.costs || {};
   const pct = (v?: number) => (v === undefined ? "—" : `${+(v * 100).toFixed(3)}%`);
   const rows: [string, ReactNode][] = [
+    [t("bt.market"), label(MARKET, mk, lang)],
     [t("bt.universe"), uni],
     [t("bt.filters"), s.filters?.length ? s.filters.map((f, i) => <div key={i}>{filterText(f, fname(f.factor), lang)}</div>) : "—"],
     [t("bt.rank"), s.rank?.length ? s.rank.map((r, i) => <div key={i}>{rankText(r, fname(r.factor), lang)}</div>) : "—"],
@@ -638,7 +648,10 @@ function SpecCard({ bt }: { bt: Backtest }) {
     [t("bt.rebalance"), label(REBALANCE, s.rebalance, lang)],
     [t("bt.period"), s.period ? `${s.period[0]} ~ ${s.period[1] || (lang === "zh" ? "最新" : "latest")}` : "—"],
     [t("bt.benchmark"), label(BENCHMARK, s.benchmark, lang)],
-    [t("bt.costs"), t("bt.costsText", { c: pct(c.commission), s: pct(c.stamp_tax_sell), sl: pct(c.slippage) })],
+    [
+      t("bt.costs"),
+      t("bt.costsText2", { c: pct(c.commission), sb: pct(c.stamp_tax_buy ?? 0), s: pct(c.stamp_tax_sell), sl: pct(c.slippage) }),
+    ],
   ];
   return (
     <Card title={t("bt.spec")}>

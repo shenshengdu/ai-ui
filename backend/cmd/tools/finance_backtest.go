@@ -1,7 +1,7 @@
 package tools
 
 // A 股因子回测：阿里云 ah-stock-db 排队跑（约 1~2 分钟一个），结果存在那边；这里经金融平台转发。
-//   finance_backtest_factors -> GET  /api/v1/backtest/factors
+//   finance_backtest_factors -> GET  /api/v1/backtest/factors?market=A|HK|US
 //   finance_backtest_run     -> POST /api/v1/backtest {spec}（必须先在对话里把策略讲给用户、用户明确同意；然后最多等 150 秒）
 //   finance_backtest_get     -> GET  /api/v1/backtest/{id}
 //   finance_backtest_list    -> GET  /api/v1/backtests?limit=
@@ -36,30 +36,35 @@ var (
 	backtestPoll = 5 * time.Second
 )
 
-const backtestSpecDoc = `策略只能用固定格式（不能写代码）；name 必填，用简短中文概括策略（如「低估值高ROE」），讲给用户确认时也带上名字：
-{"name":"策略名（中文，简短）",
- "universe":{"pool":"all_a|hs300|zz500|zz1000|sz50","exclude":["st","new_listed_365d","suspended"],"min_avg_amount":30000000,"industries":["行业名关键词，可省略"]},
+const backtestSpecDoc = `策略只能用固定格式（不能写代码）。market 必填：A（A 股）/ HK（港股）/ US（美股）；用户没说是哪个市场就先问。
+name 必填，用简短中文概括策略（如「低估值高ROE」）。讲给用户确认时带上市场和名字：
+{"market":"A","name":"策略名（中文，简短）",
+ "universe":{"pool":"见下","exclude":["new_listed_365d","suspended"],"min_avg_amount":30000000,"industries":["行业名关键词，只有 A 股能用，可省略"]},
  "filters":[{"factor":"roe","op":">","value":10},{"factor":"pe_ttm","op":"between","value":[0,30]},{"factor":"mom_6m","op":"top_pct","value":30}],
  "rank":[{"factor":"ep","weight":0.5},{"factor":"roe","weight":0.3},{"factor":"vol_60d","weight":0.2,"order":"asc"}],
- "hold":20,"rebalance":"weekly|monthly|quarterly","weighting":"equal",
- "period":["2015-01-01",null],"benchmark":"000300.SH|000905.SH|000852.SH|000016.SH|000001.SH|399006.SZ",
- "costs":{"commission":0.00025,"stamp_tax_sell":0.0005,"slippage":0.001}}
+ "hold":20,"rebalance":"weekly|monthly|quarterly","weighting":"equal","period":["2015-01-01",null],"benchmark":"见下",
+ "costs":{"commission":0.00025,"stamp_tax_buy":0,"stamp_tax_sell":0.0005,"slippage":0.001}}
+各市场（省略的字段用该市场默认值）：
+- A：pool all_a|hs300|zz500|zz1000|sz50；exclude 可选 st、new_listed_365d、suspended；成交额门槛默认 3000 万元；benchmark 000300.SH|000905.SH|000852.SH|000016.SH|000001.SH|399006.SZ（默认沪深300）；有涨跌停；印花税卖出 0.05%。
+- HK：pool all_hk；exclude 可选 new_listed_365d、suspended；门槛默认 2000 万港元；benchmark HSI.HK|HSCEI.HK|HSTECH.HK（默认恒指；恒生科技 2020-08 起才有）；无涨跌停；印花税买卖各 0.1%；估值用财报算（人民币 / 美元报表折港币）；没有市销率、市现率。
+- US：pool all_us（普通股，不含 ETF）；exclude 可选 new_listed_365d、suspended；门槛默认 2000 万美元；benchmark SPX|NDX（默认标普500）；无涨跌停、无印花税；估值用 SEC 财报算；多一个 mcap（总市值）。
+港股、美股的库里没有已退市股票：结果偏乐观，讲策略和解读结果时都要告诉用户。
 op：> >= < <= between top_pct bottom_pct（百分比 0~100）；rank 每个因子先横截面排名再按 weight 加权，order 省略用因子默认方向（asc=越小越好）；
-hold 1~100 只等权；period 起点不早于 2010-01-01、至少 1 年，终点 null = 最新；省略的字段用默认值。因子名先用 finance_backtest_factors 查。`
+hold 1~100 只等权；period 起点不早于 2010-01-01、至少 1 年，终点 null = 最新。因子名先用 finance_backtest_factors（带 market）查，各市场能用的不一样。`
 
 func financeBacktestTools() []*Tool {
 	return []*Tool{{
 		ID:          uuid.New().String(),
 		Name:        "finance_backtest_factors",
-		Description: "A 股因子回测可用的因子（名字、说明、默认方向）、股票池和基准。用户想回测选股策略时先调它，再按这些因子名设计策略。",
-		InputSchema: `{"type":"object","properties":{},"additionalProperties":false}`,
+		Description: "因子回测某个市场（A 股 / 港股 / 美股）可用的因子（名字、说明、默认方向）、股票池、基准、默认值和注意事项。用户想回测选股策略时先确定市场、调它，再按这些因子名设计策略。",
+		InputSchema: `{"type":"object","properties":{"market":{"type":"string","enum":["A","HK","US"],"description":"A 股 / 港股 / 美股"}},"required":["market"],"additionalProperties":false}`,
 		IsEnabled:   true,
 	}, {
 		ID:   uuid.New().String(),
 		Name: "finance_backtest_run",
-		Description: "提交一个 A 股因子选股回测（后复权、按调仓日收盘打分、下一交易日开盘成交、扣佣金印花税滑点、涨跌停买卖不了、退市按最后价卖出；" +
+		Description: "提交一个因子选股回测（A 股 / 港股 / 美股；后复权、按调仓日收盘打分、下一交易日开盘成交、扣佣金印花税滑点、A 股涨跌停买卖不了、退市按最后价卖出；" +
 			"附带同候选池随机选股对照和最近几年样本外表现）。" +
-			"调用前必须：先用中文把完整策略讲给用户（股票池和排除项、每个筛选条件、打分因子和权重方向、持股数、调仓频率、区间、基准、成本），" +
+			"调用前必须：先用中文把完整策略讲给用户（市场、股票池和排除项、每个筛选条件、打分因子和权重方向、持股数、调仓频率、区间、基准、成本；港股 / 美股说明不含退市股、结果偏乐观），" +
 			"问用户「按这个跑吗？」，用户明确同意后才调用，并带 user_confirmed=true；用户改了就按改后的再确认一次。" +
 			"一个回测约 1~2 分钟，排队时更久（每天 18:30–20:30 数据更新期间暂停）；工具最多等 150 秒，没跑完就告诉用户结果会出现在右侧「回测」列表里，稍后可用 finance_backtest_get 查。" +
 			"解读结果时数字原样引用，说清楚是历史回测、不代表未来，要提到随机选股对照（策略年化超过了多少比例的随机组合）和样本外表现；" +
@@ -193,6 +198,7 @@ func backtestTool(ctx context.Context, name, args string) providers.ToolOutput {
 		ID            string         `json:"id"`
 		Limit         int            `json:"limit"`
 		Name          string         `json:"name"`
+		Market        string         `json:"market"`
 	}
 	if strings.TrimSpace(args) != "" {
 		if err := json.Unmarshal([]byte(args), &p); err != nil {
@@ -211,7 +217,14 @@ func backtestTool(ctx context.Context, name, args string) providers.ToolOutput {
 	}
 	switch name {
 	case "finance_backtest_factors":
-		body, err := get("/api/v1/backtest/factors")
+		mk := strings.ToUpper(strings.TrimSpace(p.Market))
+		if mk == "" {
+			mk = "A"
+		}
+		if mk != "A" && mk != "HK" && mk != "US" {
+			return financeError("market 只能是 A、HK、US")
+		}
+		body, err := get("/api/v1/backtest/factors?market=" + mk)
 		if err != nil {
 			return financeError("%v", err)
 		}
@@ -250,6 +263,9 @@ func backtestTool(ctx context.Context, name, args string) providers.ToolOutput {
 		}
 		if len(p.Spec) == 0 {
 			return financeError("spec 不能为空")
+		}
+		if mk, _ := p.Spec["market"].(string); mk != "A" && mk != "HK" && mk != "US" {
+			return financeError("spec.market 必填：A（A 股）/ HK（港股）/ US（美股）；用户没说清是哪个市场就先问用户")
 		}
 		if n, _ := p.Spec["name"].(string); strings.TrimSpace(n) == "" {
 			return financeError("spec.name 必填：用简短中文概括这个策略（如「低估值高ROE」），不用再问用户，直接带上名字重新调用")

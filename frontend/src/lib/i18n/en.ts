@@ -548,6 +548,8 @@ export const en = {
   "bt.rename": "Rename",
   "bt.deleteTitle": "Delete this backtest?",
   "bt.deleteDesc": "This permanently deletes “{name}” and its results. A queued backtest is cancelled.",
+  "bt.market": "Market",
+  "bt.costsText2": "commission {c} · stamp tax buy {sb} / sell {s} · slippage {sl}",
   "bt.back": "Back",
   "bt.notFound": "Backtest not found",
   "bt.cagr": "CAGR",
