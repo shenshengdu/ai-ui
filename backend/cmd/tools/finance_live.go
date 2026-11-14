@@ -18,7 +18,7 @@ import (
 // 盘中「今天这一根」K 线：库里的日线要收盘后（北京 18:40）才有当天的，K 线页用这个临时拼上最后一根（不写库）。
 // GET /api/tools/finance/live?symbol=002594.SZ
 // A 股：交易所网站为主（深市 szse.cn、沪市 yunhq.sse.com.cn），失败退回腾讯；
-// 港股：盘中老虎实时（金融平台 /api/v1/markets/hk_live，每只最多 3 分钟刷新一次），拿不到用腾讯（盘中延迟约 15 分钟，delayed=true）；
+// 港股：金融平台 /api/v1/markets/hk_live（富途实时优先，再老虎），拿不到用腾讯（盘中延迟约 15 分钟，delayed=true）；
 // 美股：金融平台 /api/v1/markets/us_live（盘中 FMP 名单内 / Alpaca 现价 + Finnhub 开高低；收盘后 Finnhub）。
 // 这些请求从本机发出，不占阿里云每日收盘同步（腾讯）的请求额度。
 
@@ -121,7 +121,7 @@ func liveLookup(ctx context.Context, symbol string, m []string) liveResp {
 	} else if hk {
 		code := fmt.Sprintf("%05s", m[3])
 		code = strings.ReplaceAll(code, " ", "0")
-		srcs = []src{{"老虎", func() (*liveQuote, error) { return liveTiger(ctx, code) }},
+		srcs = []src{{"富途", func() (*liveQuote, error) { return liveTiger(ctx, code) }},
 			{"腾讯", func() (*liveQuote, error) { return liveTencent(ctx, "hk"+code, true) }}}
 	} else {
 		code, ex := m[1], m[2]
@@ -337,20 +337,18 @@ func livePlatform(ctx context.Context, path string, out any) error {
 	return json.NewDecoder(io.LimitReader(resp.Body, 256<<10)).Decode(out)
 }
 
-// 港股盘中：老虎实时（金融平台 hk_live；不在交易时段 / 额度用完 / 出错 → 没有这只 → 换腾讯）
+// 港股：金融平台 hk_live（先富途开放平台：实时、不分交易时段；再老虎：只在交易时段）；都没有 → 换腾讯
 func liveTiger(ctx context.Context, five string) (*liveQuote, error) {
-	if !liveSession(liveNow(), true) {
-		return nil, fmt.Errorf("不在港股交易时段")
-	}
 	var d struct {
 		Quotes map[string]struct {
-			O    *float64 `json:"open"`
-			H    *float64 `json:"high"`
-			L    *float64 `json:"low"`
-			P    *float64 `json:"price"`
-			PC   *float64 `json:"prev_close"`
-			V    *float64 `json:"volume"`
-			Time string   `json:"time"`
+			O      *float64 `json:"open"`
+			H      *float64 `json:"high"`
+			L      *float64 `json:"low"`
+			P      *float64 `json:"price"`
+			PC     *float64 `json:"prev_close"`
+			V      *float64 `json:"volume"`
+			Time   string   `json:"time"`
+			Source string   `json:"source"`
 		} `json:"quotes"`
 	}
 	sym := strings.TrimLeft(five, "0")
@@ -376,6 +374,7 @@ func liveTiger(ctx context.Context, five string) (*liveQuote, error) {
 	if out.open <= 0 {
 		out.open = out.last
 	}
+	out.srcName = map[string]string{"futu": "富途", "tiger": "老虎"}[q.Source]
 	return out, nil
 }
 

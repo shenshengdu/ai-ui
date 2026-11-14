@@ -120,7 +120,7 @@ func TestLiveHKTigerThenTencent(t *testing.T) {
 				_, _ = w.Write([]byte(`{"status":"success","quotes":{}}`))
 				return
 			}
-			_, _ = w.Write([]byte(`{"status":"success","quotes":{"00700":{"open":400,"high":405,"low":398,"price":403.2,"prev_close":401,"volume":1234567,"time":"2026-11-13 14:29:58","source":"tiger"}}}`))
+			_, _ = w.Write([]byte(`{"status":"success","quotes":{"00700":{"open":400,"high":405,"low":398,"price":403.2,"prev_close":401,"volume":1234567,"time":"2026-11-13 14:29:58","source":"futu"}}}`))
 			return
 		}
 		f := make([]string, 50)
@@ -130,7 +130,7 @@ func TestLiveHKTigerThenTencent(t *testing.T) {
 	t.Setenv("FINANCE_BASE_URL", liveTencentURL[:strings.Index(liveTencentURL, "/qt")]+"/fp")
 	t.Setenv("FINANCE_API_KEY", "k")
 	r := liveCall(t, "0700.HK")
-	if r.Source != "老虎" || *r.Bar.C != 403.2 || *r.Bar.V != 1234567 || r.Delayed || !r.Trading {
+	if r.Source != "富途" || *r.Bar.C != 403.2 || *r.Bar.V != 1234567 || r.Delayed || !r.Trading {
 		t.Fatalf("%+v", r)
 	}
 	tiger = false
