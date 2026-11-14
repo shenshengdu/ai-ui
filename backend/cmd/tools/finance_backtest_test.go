@@ -88,7 +88,7 @@ func TestBacktestRunTimeoutAndSpecError(t *testing.T) {
 		}
 		_, _ = w.Write([]byte(`{"status":"success","backtest":{"id":"abcdef012345","status":"queued","ahead":2}}`))
 	})
-	out := backtestTool(context.Background(), "finance_backtest_run", `{"spec":{"rank":[{"factor":"foo"}]},"user_confirmed":true}`)
+	out := backtestTool(context.Background(), "finance_backtest_run", `{"spec":{"name":"x","rank":[{"factor":"foo"}]},"user_confirmed":true}`)
 	if !strings.Contains(out.Content, "因子不认识：foo") {
 		t.Fatalf("got %s", out.Content)
 	}
