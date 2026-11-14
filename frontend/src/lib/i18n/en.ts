@@ -545,6 +545,7 @@ export const en = {
   "bt.status.failed": "Failed",
   "bt.ahead": "{n} ahead",
   "bt.attempt": "run #{n}",
+  "bt.rename": "Rename",
   "bt.back": "Back",
   "bt.notFound": "Backtest not found",
   "bt.cagr": "CAGR",

@@ -5,12 +5,15 @@ package tools
 //   finance_backtest_run     -> POST /api/v1/backtest {spec}（必须先在对话里把策略讲给用户、用户明确同意；然后最多等 150 秒）
 //   finance_backtest_get     -> GET  /api/v1/backtest/{id}
 //   finance_backtest_list    -> GET  /api/v1/backtests?limit=
+//   finance_backtest_rename  -> PATCH /api/v1/backtest/{id} {name}
 // 页面：GET /api/tools/finance/backtests、/api/tools/finance/backtest?id=（右侧回测列表、/backtest/:id 详情页）
+//       POST /api/tools/finance/backtest/rename {id, name}（详情页标题旁改名）
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -32,7 +35,7 @@ var (
 	backtestPoll = 5 * time.Second
 )
 
-const backtestSpecDoc = `策略只能用固定格式（不能写代码）：
+const backtestSpecDoc = `策略只能用固定格式（不能写代码）；name 必填，用简短中文概括策略（如「低估值高ROE」），讲给用户确认时也带上名字：
 {"name":"策略名（中文，简短）",
  "universe":{"pool":"all_a|hs300|zz500|zz1000|sz50","exclude":["st","new_listed_365d","suspended"],"min_avg_amount":30000000,"industries":["行业名关键词，可省略"]},
  "filters":[{"factor":"roe","op":">","value":10},{"factor":"pe_ttm","op":"between","value":[0,30]},{"factor":"mom_6m","op":"top_pct","value":30}],
@@ -72,6 +75,12 @@ func financeBacktestTools() []*Tool {
 		IsEnabled:   true,
 	}, {
 		ID:          uuid.New().String(),
+		Name:        "finance_backtest_rename",
+		Description: "给一个回测改策略名（1~40 字）。只在用户要求改名时用；id 不知道就先用 finance_backtest_list 找。",
+		InputSchema: `{"type":"object","properties":{"id":{"type":"string","description":"回测 id，12 位十六进制"},"name":{"type":"string","description":"新名字"}},"required":["id","name"],"additionalProperties":false}`,
+		IsEnabled:   true,
+	}, {
+		ID:          uuid.New().String(),
 		Name:        "finance_backtest_list",
 		Description: "最近的回测列表（id、策略名、第几次、状态、年化、最大回撤、夏普、超额、随机对照百分位）。用户说「上次那个回测」「之前跑过的」时用它找 id。",
 		InputSchema: `{"type":"object","properties":{"limit":{"type":"integer","description":"条数，默认 20，最多 50"}},"additionalProperties":false}`,
@@ -81,7 +90,7 @@ func financeBacktestTools() []*Tool {
 
 func isBacktestTool(name string) bool {
 	switch name {
-	case "finance_backtest_factors", "finance_backtest_run", "finance_backtest_get", "finance_backtest_list":
+	case "finance_backtest_factors", "finance_backtest_run", "finance_backtest_get", "finance_backtest_list", "finance_backtest_rename":
 		return true
 	}
 	return false
@@ -182,6 +191,7 @@ func backtestTool(ctx context.Context, name, args string) providers.ToolOutput {
 		UserConfirmed bool           `json:"user_confirmed"`
 		ID            string         `json:"id"`
 		Limit         int            `json:"limit"`
+		Name          string         `json:"name"`
 	}
 	if strings.TrimSpace(args) != "" {
 		if err := json.Unmarshal([]byte(args), &p); err != nil {
@@ -224,12 +234,24 @@ func backtestTool(ctx context.Context, name, args string) providers.ToolOutput {
 			return financeError("%v", err)
 		}
 		return providers.ToolOutput{Content: backtestForModel(body)}
+	case "finance_backtest_rename":
+		code, body, err := backtestRename(ctx, p.ID, p.Name)
+		if err != nil {
+			return financeError("%v", err)
+		}
+		if code < 200 || code > 299 {
+			return financeError("%s", backtestErrText(code, body))
+		}
+		return providers.ToolOutput{Content: string(body)}
 	case "finance_backtest_run":
 		if !p.UserConfirmed {
 			return financeError("先用中文把完整策略讲给用户并得到明确同意，再带 user_confirmed=true 调用")
 		}
 		if len(p.Spec) == 0 {
 			return financeError("spec 不能为空")
+		}
+		if n, _ := p.Spec["name"].(string); strings.TrimSpace(n) == "" {
+			return financeError("spec.name 必填：用简短中文概括这个策略（如「低估值高ROE」），不用再问用户，直接带上名字重新调用")
 		}
 		reqBody, _ := json.Marshal(map[string]any{"spec": p.Spec})
 		code, body, err := backtestCall(ctx, http.MethodPost, "/api/v1/backtest", reqBody, 30*time.Second)
@@ -275,6 +297,57 @@ func backtestTool(ctx context.Context, name, args string) providers.ToolOutput {
 			backtestForModel(last) + `}`}
 	}
 	return financeError("unknown tool %s", name)
+}
+
+// 参数不对（页面返回 400，不是 502）
+type backtestBadInput struct{ msg string }
+
+func (e backtestBadInput) Error() string { return e.msg }
+
+// backtestRename：校验后 PATCH 平台
+func backtestRename(ctx context.Context, id, name string) (int, []byte, error) {
+	id = strings.ToLower(strings.TrimSpace(id))
+	name = strings.TrimSpace(name)
+	if !backtestIDRe.MatchString(id) {
+		return 0, nil, backtestBadInput{fmt.Sprintf("id 是 12 位十六进制：%q", id)}
+	}
+	if n := len([]rune(name)); n < 1 || n > 40 {
+		return 0, nil, backtestBadInput{"名字要 1~40 个字"}
+	}
+	b, _ := json.Marshal(map[string]string{"name": name})
+	return backtestCall(ctx, http.MethodPatch, "/api/v1/backtest/"+id, b, 30*time.Second)
+}
+
+// 页面用：POST /api/tools/finance/backtest/rename {id, name}
+func financeBacktestRenameHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var p struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&p); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "error", "error": "请求格式不对"})
+		return
+	}
+	code, body, err := backtestRename(r.Context(), p.ID, p.Name)
+	var bad backtestBadInput
+	if errors.As(err, &bad) {
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "error", "error": err.Error()})
+		return
+	}
+	if err != nil {
+		w.WriteHeader(http.StatusBadGateway)
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "error", "error": "回测服务连不上"})
+		return
+	}
+	if code < 200 || code > 299 {
+		w.WriteHeader(code)
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "error", "error": backtestErrText(code, body)})
+		return
+	}
+	_, _ = w.Write(body)
 }
 
 // 页面用：GET /api/tools/finance/backtests?limit=50、GET /api/tools/finance/backtest?id=&full=0|1

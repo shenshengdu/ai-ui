@@ -58,6 +58,9 @@ func TestBacktestRunWaitsForDone(t *testing.T) {
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
 	})
+	if out := backtestTool(context.Background(), "finance_backtest_run", `{"spec":{"hold":20},"user_confirmed":true}`); !strings.Contains(out.Content, "spec.name 必填") {
+		t.Fatalf("name required: %s", out.Content)
+	}
 	out := backtestTool(context.Background(), "finance_backtest_run", `{"spec":{"name":"低估值"},"user_confirmed":true}`)
 	for _, want := range []string{`"cagr":12.3`, `"page":"/backtest/abcdef012345"`, `共 2 期持仓`, `"cagr_median":2`} {
 		if !strings.Contains(out.Content, want) {
@@ -85,7 +88,7 @@ func TestBacktestRunTimeoutAndSpecError(t *testing.T) {
 		}
 		_, _ = w.Write([]byte(`{"status":"success","backtest":{"id":"abcdef012345","status":"queued","ahead":2}}`))
 	})
-	out := backtestTool(context.Background(), "finance_backtest_run", `{"spec":{"rank":[{"factor":"foo"}]},"user_confirmed":true}`)
+	out := backtestTool(context.Background(), "finance_backtest_run", `{"spec":{"name":"x","rank":[{"factor":"foo"}]},"user_confirmed":true}`)
 	if !strings.Contains(out.Content, "因子不认识：foo") {
 		t.Fatalf("got %s", out.Content)
 	}
@@ -145,9 +148,41 @@ func TestBacktestToolsRegistered(t *testing.T) {
 			t.Fatalf("bad schema %s", tl.Name)
 		}
 	}
-	for _, n := range []string{"finance_backtest_factors", "finance_backtest_run", "finance_backtest_get", "finance_backtest_list"} {
+	for _, n := range []string{"finance_backtest_factors", "finance_backtest_run", "finance_backtest_get", "finance_backtest_list", "finance_backtest_rename"} {
 		if !names[n] || !isFinanceTool(n) {
 			t.Fatalf("%s not registered", n)
 		}
+	}
+}
+
+func TestBacktestRename(t *testing.T) {
+	backtestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch || r.URL.Path != "/api/v1/backtest/abcdef012345" {
+			w.WriteHeader(404)
+			_, _ = w.Write([]byte(`{"detail":"没有这个回测"}`))
+			return
+		}
+		b, _ := io.ReadAll(r.Body)
+		var d map[string]string
+		_ = json.Unmarshal(b, &d)
+		_, _ = w.Write([]byte(`{"status":"success","backtest":{"id":"abcdef012345","name":"` + d["name"] + `","attempt":1}}`))
+	})
+	if out := backtestTool(context.Background(), "finance_backtest_rename", `{"id":"abcdef012345","name":" 低估值高ROE "}`); !strings.Contains(out.Content, `"name":"低估值高ROE"`) {
+		t.Fatalf("tool: %s", out.Content)
+	}
+	rec := httptest.NewRecorder()
+	financeBacktestRenameHTTP(rec, httptest.NewRequest("POST", "/finance/backtest/rename", strings.NewReader(`{"id":"abcdef012345","name":"小市值"}`)))
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "小市值") {
+		t.Fatalf("http: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	financeBacktestRenameHTTP(rec, httptest.NewRequest("POST", "/finance/backtest/rename", strings.NewReader(`{"id":"abcdef012345","name":"   "}`)))
+	if rec.Code != 400 {
+		t.Fatalf("empty name: %d", rec.Code)
+	}
+	rec = httptest.NewRecorder()
+	financeBacktestRenameHTTP(rec, httptest.NewRequest("POST", "/finance/backtest/rename", strings.NewReader(`{"id":"0123456789ab","name":"x"}`)))
+	if rec.Code != 404 || !strings.Contains(rec.Body.String(), "没有这个回测") {
+		t.Fatalf("404: %d %s", rec.Code, rec.Body.String())
 	}
 }

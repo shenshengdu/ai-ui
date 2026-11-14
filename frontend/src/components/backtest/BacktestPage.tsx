@@ -5,8 +5,8 @@
  */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeftIcon, FlaskConicalIcon, Loader2Icon } from "lucide-react";
-import { drawdown, fetchBacktest, fmtNum, fmtPct, isActive, platformSymbol, type Backtest, type Metrics } from "./api";
+import { ArrowLeftIcon, CheckIcon, FlaskConicalIcon, Loader2Icon, PencilIcon, XIcon } from "lucide-react";
+import { drawdown, fetchBacktest, fmtNum, fmtPct, isActive, platformSymbol, renameBacktest, type Backtest, type Metrics } from "./api";
 import { BacktestList, StatusBadge, signClass, useBacktests } from "./BacktestList";
 import { LineChart } from "./LineChart";
 import { BENCHMARK, EXCLUDE, POOL, REBALANCE, filterText, fmtAmount, label, rankText } from "./labels";
@@ -124,12 +124,10 @@ export function BacktestPage() {
       <Header
         title={
           bt ? (
-            <>
-              {bt.name}
-              {bt.attempt && bt.attempt > 1 ? (
-                <span className="ml-2 text-xs font-normal text-muted-foreground">{t("bt.attempt", { n: bt.attempt })}</span>
-              ) : null}
-            </>
+            <NameEditor
+              bt={bt}
+              onRenamed={(name, attempt) => setBt((b) => (b ? { ...b, name, attempt: attempt ?? b.attempt, spec: b.spec ? { ...b.spec, name } : b.spec } : b))}
+            />
           ) : (
             t("bt.title")
           )
@@ -156,6 +154,77 @@ export function BacktestPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function NameEditor({ bt, onRenamed }: { bt: Backtest; onRenamed: (name: string, attempt?: number) => void }) {
+  const { t } = useI18n();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(bt.name);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const save = async () => {
+    const name = value.trim();
+    if (!name || name === bt.name) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    setErr(null);
+    try {
+      const r = await renameBacktest(bt.id, name);
+      onRenamed(r.name, r.attempt);
+      setEditing(false);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+  if (!editing)
+    return (
+      <span className="flex min-w-0 items-center gap-1">
+        <span className="truncate">{bt.name}</span>
+        {bt.attempt && bt.attempt > 1 ? (
+          <span className="shrink-0 text-xs font-normal text-muted-foreground">{t("bt.attempt", { n: bt.attempt })}</span>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => {
+            setValue(bt.name);
+            setErr(null);
+            setEditing(true);
+          }}
+          title={t("bt.rename")}
+          aria-label={t("bt.rename")}
+          className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted"
+        >
+          <PencilIcon className="size-3.5" />
+        </button>
+      </span>
+    );
+  return (
+    <span className="flex min-w-0 items-center gap-1">
+      <input
+        autoFocus
+        value={value}
+        maxLength={40}
+        disabled={saving}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") void save();
+          if (e.key === "Escape") setEditing(false);
+        }}
+        className="min-w-0 flex-1 rounded-md border bg-background px-2 py-0.5 text-sm font-normal"
+      />
+      <button type="button" onClick={() => void save()} disabled={saving} aria-label={t("common.save")} className="shrink-0 rounded-md p-1 hover:bg-muted">
+        {saving ? <Loader2Icon className="size-4 animate-spin" /> : <CheckIcon className="size-4" />}
+      </button>
+      <button type="button" onClick={() => setEditing(false)} disabled={saving} aria-label={t("common.cancel")} className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted">
+        <XIcon className="size-4" />
+      </button>
+      {err && <span className="shrink-0 text-xs font-normal text-destructive">{err}</span>}
+    </span>
   );
 }
 

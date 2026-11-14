@@ -103,6 +103,19 @@ export async function fetchBacktest(id: string, full = true, fetchImpl: typeof f
   return d.backtest as Backtest;
 }
 
+export async function renameBacktest(id: string, name: string, fetchImpl: typeof fetch = fetch): Promise<{ name: string; attempt?: number }> {
+  const headers = getHeaders({ "Content-Type": "application/json" });
+  const r = await fetchImpl("/api/tools/finance/backtest/rename", {
+    method: "POST",
+    headers,
+    credentials: "include",
+    body: JSON.stringify({ id, name }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || d?.status !== "success") throw new Error(d?.error || `HTTP ${r.status}`);
+  return d.backtest;
+}
+
 export const isActive = (s?: string) => s === "queued" || s === "running";
 
 export function fmtPct(v: number | null | undefined, digits = 1, sign = false): string {
