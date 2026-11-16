@@ -137,10 +137,18 @@ function useMarketQuotes(open: boolean): Record<string, MarketQuote> {
         })
         .catch(() => {});
     load();
-    const timer = setInterval(load, 60_000);
+    // 每分钟刷新；标签页在后台时不取，切回来马上刷新一次
+    const timer = setInterval(() => {
+      if (!document.hidden) load();
+    }, 60_000);
+    const onVisible = () => {
+      if (!document.hidden) load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       cancelled = true;
       clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [open]);
   return q;
