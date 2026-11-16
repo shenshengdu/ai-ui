@@ -49,3 +49,59 @@ describe("kline legend change", () => {
     expect(changeLegends(null, { close: 5 }).some((x) => x.title === "change")).toBe(false);
   });
 });
+
+import { startLivePolling, type LiveQuote } from "@/components/ai-elements/kline-chart";
+import { vi } from "vitest";
+
+describe("live polling", () => {
+  const fakeDoc = () => {
+    const ls: (() => void)[] = [];
+    return {
+      hidden: false,
+      addEventListener: (_: string, f: () => void) => void ls.push(f),
+      removeEventListener: (_: string, f: () => void) => void ls.splice(ls.indexOf(f), 1),
+      fire: () => ls.forEach((f) => f()),
+      count: () => ls.length,
+    };
+  };
+  it("polls every 60s while trading, pauses when hidden, stops after close", async () => {
+    vi.useFakeTimers();
+    const doc = fakeDoc();
+    let trading = true;
+    const fetchQuote = vi.fn(async (): Promise<LiveQuote | null> => ({ trading }));
+    const got: LiveQuote[] = [];
+    const stop = startLivePolling(fetchQuote, (q) => got.push(q), 60_000, doc as unknown as Document);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchQuote).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(59_000);
+    expect(fetchQuote).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(fetchQuote).toHaveBeenCalledTimes(2);
+    doc.hidden = true; // 切到后台：不再取
+    doc.fire();
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(fetchQuote).toHaveBeenCalledTimes(2);
+    doc.hidden = false; // 切回来：马上取一次，继续每 60 秒
+    doc.fire();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchQuote).toHaveBeenCalledTimes(3);
+    trading = false; // 收盘：取到这一次后停
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetchQuote).toHaveBeenCalledTimes(4);
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(fetchQuote).toHaveBeenCalledTimes(4);
+    expect(got.length).toBe(4);
+    stop();
+    expect(doc.count()).toBe(0);
+    vi.useRealTimers();
+  });
+  it("gives up after 3 failures", async () => {
+    vi.useFakeTimers();
+    const fetchQuote = vi.fn(async () => null);
+    const stop = startLivePolling(fetchQuote, () => {}, 1000, fakeDoc() as unknown as Document);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(fetchQuote).toHaveBeenCalledTimes(3);
+    stop();
+    vi.useRealTimers();
+  });
+});

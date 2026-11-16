@@ -248,6 +248,56 @@ export async function fetchLiveQuote(symbol: string): Promise<LiveQuote | null> 
   return d as LiveQuote;
 }
 
+export const LIVE_REFRESH_MS = 60_000;
+
+/**
+ * 实时行情轮询：马上取一次，之后交易时段每 intervalMs 取一次；不在交易时段（或连续 3 次取不到）就停。
+ * 页面不可见时不取、也不留定时器；重新可见时马上取一次并恢复。返回停止函数。
+ */
+export function startLivePolling(
+  fetchQuote: () => Promise<LiveQuote | null>,
+  onQuote: (q: LiveQuote) => void,
+  intervalMs = LIVE_REFRESH_MS,
+  doc: Pick<Document, "hidden" | "addEventListener" | "removeEventListener"> | undefined = typeof document === "undefined" ? undefined : document,
+): () => void {
+  let stop = false;
+  let done = false; // 收盘了 / 一直取不到：不再轮询
+  let busy = false;
+  let fails = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const clear = () => {
+    if (timer) clearTimeout(timer);
+    timer = undefined;
+  };
+  const tick = async () => {
+    clear();
+    if (stop || done || busy || doc?.hidden) return;
+    busy = true;
+    const q = await fetchQuote().catch(() => null);
+    busy = false;
+    if (stop) return;
+    if (q) {
+      fails = 0;
+      onQuote(q);
+      done = !q.trading;
+    } else if (++fails >= 3) {
+      done = true;
+    }
+    if (!done && !doc?.hidden) timer = setTimeout(() => void tick(), intervalMs);
+  };
+  const onVisible = () => {
+    if (doc?.hidden) clear();
+    else void tick();
+  };
+  doc?.addEventListener("visibilitychange", onVisible);
+  void tick();
+  return () => {
+    stop = true;
+    clear();
+    doc?.removeEventListener("visibilitychange", onVisible);
+  };
+}
+
 /** 库里最后一根比实时那根旧 → 把实时那根接上；库里已经有今天的（收盘同步后）就用库里的 */
 export function mergeLive(bars: Bar[], live: LiveQuote | null): Bar[] {
   const b = live?.bar;
@@ -405,28 +455,12 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
     };
   }, [spec, range]);
 
-  // 盘中实时这一根：交易时段每 30 秒刷新（页面在后台时不取），收盘后停
+  // 盘中实时这一根：交易时段每 60 秒刷新，收盘后停；页面切到后台（标签页不可见）就完全暂停，切回来马上取一次再继续
   const liveSymbol = spec && isLiveSymbol(spec.symbol) ? spec.symbol.toUpperCase() : "";
   useEffect(() => {
     setLive(null);
     if (!liveSymbol) return;
-    let stop = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const tick = async () => {
-      let again = true;
-      if (typeof document === "undefined" || !document.hidden) {
-        const q = await fetchLiveQuote(liveSymbol).catch(() => null);
-        if (stop) return;
-        if (q) setLive(q);
-        again = !!q?.trading;
-      }
-      if (!stop && again) timer = setTimeout(tick, 30000);
-    };
-    void tick();
-    return () => {
-      stop = true;
-      if (timer) clearTimeout(timer);
-    };
+    return startLivePolling(() => fetchLiveQuote(liveSymbol), setLive);
   }, [liveSymbol]);
   const liveShown = !!(bars && live?.bar && mergeLive(bars, live).length > bars.length);
   const liveRef = useRef(live);
