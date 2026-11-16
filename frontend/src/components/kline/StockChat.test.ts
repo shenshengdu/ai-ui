@@ -42,6 +42,7 @@ describe("pageContext 长度", () => {
     expect([...c].length).toBeLessThan(2000);
     expect(c).toContain("```chart");
     expect(c).toContain("finance_company");
+    expect(c).toContain("finance_candle");
     expect(c).toContain("web_search");
     expect(c).toContain("只聊投资相关");
     expect(c).toContain("不发布报告");

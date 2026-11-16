@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -36,7 +37,7 @@ var financeHTTPClient = &http.Client{}
 
 func isFinanceTool(name string) bool {
 	switch name {
-	case "finance_stock", "finance_technical", "finance_valuation", "finance_market", "finance_market_news", "finance_decision", "finance_quote", "finance_global_market", "finance_peer_compare", "finance_peer_group_save", "finance_peer_quant", "finance_warmup_status", "finance_account", "finance_judgement", "finance_macro", "finance_company":
+	case "finance_stock", "finance_technical", "finance_valuation", "finance_market", "finance_market_news", "finance_decision", "finance_quote", "finance_global_market", "finance_peer_compare", "finance_peer_group_save", "finance_peer_quant", "finance_warmup_status", "finance_account", "finance_judgement", "finance_macro", "finance_company", "finance_candle":
 		return true
 	}
 	if isBacktestTool(name) {
@@ -116,6 +117,19 @@ func financeBaseTools() []*Tool {
 			IsEnabled:   true,
 		},
 		{
+			ID:   uuid.New().String(),
+			Name: "finance_candle",
+			Description: "今日 K 线解读 + 明日展望（A 股、港股、美股）。用户问「今天这根 K 线什么意思」「K 线形态」「明天会怎么走」「明天能涨吗」时用。" +
+				"返回：这根 K 线本身（大中小阴阳线、假阳线、涨跌、实体和上下影线、振幅）；识别出的形态（十字星、锤子线、上吊线、射击之星、吞没、孕线、刺透、乌云盖顶、早晨之星、黄昏之星、红三兵、三只乌鸦、跳空缺口、突破或跌破 20/60 日高低点、A 股涨跌停等）和每个形态在这只股票近几年出现后 1/5/10 日的涨跌统计（和所有交易日比）；" +
+				"量价（和前 20 日均量比的放量缩量、天量地量、放量滞涨等）；位置（均线排列、近 60 日区间位置、前期趋势）；" +
+				"明日展望（outlook）：历史上和今天情况相近的交易日次日的上涨概率和涨跌分布、强弱分界价（站上今日最高 / 跌破今日最低）、上方压力和下方支撑、按近 14 日平均波动估的明日大致区间。" +
+				"provisional=true 表示盘中未收盘（今天这根还会变，量能不比）。" +
+				"回答规则：数字原样引用；先讲今天这根和形态，再讲量价和位置，最后讲明日展望；明日展望只能说成「历史上相近情况下次日上涨的概率是多少、和平时比高还是低」和「关键价位」，" +
+				"不能说成「明天会涨 / 会跌」或给目标价；history.reliable=false 或 analogs.reliable=false 的统计要说明样本少；不给买卖建议。",
+			InputSchema: `{"type":"object","properties":{"symbol":{"type":"string","description":"股票代码。美股如 AAPL；A 股 600519.SH、300750.SZ；港股 0700.HK。"},"years":{"type":"integer","minimum":1,"maximum":15,"description":"历史统计用几年的日线，默认 5"}},"required":["symbol"],"additionalProperties":false}`,
+			IsEnabled:   true,
+		},
+		{
 			ID:          uuid.New().String(),
 			Name:        "finance_market_news",
 			Description: "获取市场层新闻（不针对个股）：货币政策、通胀与就业数据、贸易与地缘、大宗商品、利率汇率、大盘综述、AI/芯片板块、加密、中国/亚洲市场，来自 Finnhub 与 Google News 多源去重聚合。返回 data（按重要性排序的新闻簇，含 themes、scope、publisher_count、content_level、url）和 theme_digest（各主题热度与代表新闻）。只能作为市场背景线索，不是事实：themes 只表示话题，不表示利好利空；theme_digest 条数只反映话题热度，不反映多空方向；content_level=headline_only 时只能复述标题含义，不得补充细节；publisher_count 表示不同发布方数量，同一通讯社稿件被多家转载不等于独立证实。不得据此给出买卖建议或修改任何模型评分。无数据或来源失败时写“暂无市场新闻数据”，不得用记忆补写行情。同一对话只调用一次。",
@@ -173,6 +187,7 @@ func financeTool(ctx context.Context, name, args string) providers.ToolOutput {
 		From            string            `json:"from"`
 		To              string            `json:"to"`
 		EarningsDate    string            `json:"earnings_date"`
+		Years           int               `json:"years"`
 	}
 	if strings.TrimSpace(args) != "" {
 		if err := json.Unmarshal([]byte(args), &p); err != nil {
@@ -356,6 +371,15 @@ func financeTool(ctx context.Context, name, args string) providers.ToolOutput {
 			return financeError("%v", aerr)
 		}
 		path, timeout = ap, 30*time.Second
+	case "finance_candle":
+		sym, ok := normalizeSymbol(p.Symbol)
+		if !ok {
+			return financeError("invalid stock symbol: %q", p.Symbol)
+		}
+		path, timeout = "/api/v1/candle/"+url.PathEscape(sym), 60*time.Second
+		if p.Years >= 1 && p.Years <= 15 {
+			path += "?years=" + strconv.Itoa(p.Years)
+		}
 	case "finance_company":
 		cp, cerr := financeCompanyPath(p.Symbol, p.Kind, p.Limit)
 		if cerr != nil {
