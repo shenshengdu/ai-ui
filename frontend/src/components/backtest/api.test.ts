@@ -24,6 +24,11 @@ describe("backtest helpers", () => {
     expect(filterText({ factor: "pe_ttm", op: "between", value: [0, 30] }, "PE", "zh")).toBe("PE 介于 0 ~ 30");
     expect(filterText({ factor: "mom_6m", op: "top_pct", value: 30 }, "6M", "zh")).toBe("6M 前 30%");
     expect(rankText({ factor: "vol_60d", weight: 0.2, order: "asc" }, "波动", "zh")).toBe("波动 × 0.2（越小越好）");
+    expect(filterText({ factor: "ma_bull_20_60", op: "==", value: 1 }, "20 日均线在 60 日均线上方（1 是 / 0 否）", "zh")).toBe(
+      "20 日均线在 60 日均线上方：是",
+    );
+    expect(filterText({ factor: "macd_gold", op: "==", value: 0 }, "近 5 日内 MACD 金叉（DIF 上穿 DEA，1 / 0）", "zh")).toMatch(/：否$/);
+    expect(filterText({ factor: "rsi_14", op: "==", value: 30 }, "RSI", "zh")).toBe("RSI = 30");
   });
   it("fetch error", async () => {
     const f = (async () => new Response(JSON.stringify({ status: "error", error: "没有这个回测" }), { status: 404 })) as typeof fetch;

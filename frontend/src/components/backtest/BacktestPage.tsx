@@ -645,7 +645,10 @@ function SpecCard({ bt }: { bt: Backtest }) {
     [t("bt.filters"), s.filters?.length ? s.filters.map((f, i) => <div key={i}>{filterText(f, fname(f.factor), lang)}</div>) : "—"],
     [t("bt.rank"), s.rank?.length ? s.rank.map((r, i) => <div key={i}>{rankText(r, fname(r.factor), lang)}</div>) : "—"],
     [t("bt.hold"), s.hold ? t("bt.holdN", { n: s.hold }) : "—"],
-    [t("bt.rebalance"), label(REBALANCE, s.rebalance, lang)],
+    [
+      t("bt.rebalance"),
+      label(REBALANCE, s.rebalance, lang) + (s.buffer && s.buffer > 1 && s.hold ? t("bt.bufferText", { n: Math.floor(s.hold * s.buffer) }) : ""),
+    ],
     [t("bt.period"), s.period ? `${s.period[0]} ~ ${s.period[1] || (lang === "zh" ? "最新" : "latest")}` : "—"],
     [t("bt.benchmark"), label(BENCHMARK, s.benchmark, lang)],
     [

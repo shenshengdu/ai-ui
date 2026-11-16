@@ -53,6 +53,7 @@ export type Spec = {
   rank?: { factor: string; weight?: number; order?: string }[];
   hold?: number;
   rebalance?: string;
+  buffer?: number;
   weighting?: string;
   period?: [string, string | null];
   benchmark?: string;
