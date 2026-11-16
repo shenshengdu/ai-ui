@@ -50,7 +50,7 @@ describe("kline legend change", () => {
   });
 });
 
-import { startLivePolling, type LiveQuote } from "@/components/ai-elements/kline-chart";
+import { nextAlignedDelay, startLivePolling, type LiveQuote } from "@/components/ai-elements/kline-chart";
 import { vi } from "vitest";
 
 describe("live polling", () => {
@@ -70,7 +70,8 @@ describe("live polling", () => {
     let trading = true;
     const fetchQuote = vi.fn(async (): Promise<LiveQuote | null> => ({ trading }));
     const got: LiveQuote[] = [];
-    const stop = startLivePolling(fetchQuote, (q) => got.push(q), 60_000, doc as unknown as Document, 300_000);
+    // 测试里的时钟固定在每分钟第 12 秒：对齐后的间隔正好是 60 秒
+    const stop = startLivePolling(fetchQuote, (q) => got.push(q), 60_000, doc as unknown as Document, 300_000, () => 12_000);
     await vi.advanceTimersByTimeAsync(0);
     expect(fetchQuote).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(59_000);
@@ -101,6 +102,14 @@ describe("live polling", () => {
     expect(fetchQuote).toHaveBeenCalledTimes(6);
     expect(doc.count()).toBe(0);
     vi.useRealTimers();
+  });
+  it("aligns trading-hours polls to second 12 of every minute", () => {
+    const at = (s: number) => 1_800_000_000_000 - (1_800_000_000_000 % 60_000) + s * 1000; // 某一分钟的第 s 秒
+    expect(nextAlignedDelay(at(0))).toBe(12_000);
+    expect(nextAlignedDelay(at(40))).toBe(32_000);
+    expect(nextAlignedDelay(at(12))).toBe(60_000);
+    expect(nextAlignedDelay(at(9))).toBe(63_000); // 离第 12 秒不到 5 秒：等下一分钟的
+    expect(nextAlignedDelay(at(13))).toBe(59_000);
   });
   it("keeps checking slowly when the quote can't be fetched", async () => {
     vi.useFakeTimers();
