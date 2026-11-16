@@ -266,6 +266,7 @@ export function StockChat({ symbol, name, onShowSymbol, onChartActions, onClose 
     { k: "deep", q: `深度研究 ${symbol}：先列计划，再查行情、技术面、财务、公告，最后给结论、风险和关键价位，并在图上标出支撑和压力` },
     { k: "tech", q: `分析一下 ${symbol} 的技术面：趋势、均线、成交量、关键指标` },
     { k: "levels", q: `${symbol} 现在的支撑位和压力位大概在哪里？` },
+    { k: "candle", q: `用 finance_candle 解读 ${symbol} 最新这根 K 线：形态、量价、位置，以及明日展望（历史相近情况的次日上涨概率、强弱分界价、压力支撑），并在图上标出关键价位` },
     { k: "ann", q: `解读一下 ${symbol} 最近的公告，有哪些值得注意` },
     { k: "fin", q: `${symbol} 最近几期财报的要点：营收、利润、毛利率的变化` },
     { k: "peers", q: `${symbol} 和同行业主要公司比一比` },

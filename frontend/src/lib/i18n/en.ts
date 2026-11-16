@@ -245,6 +245,7 @@ export const en = {
   "kline.chat.q.deep": "Deep research",
   "kline.chat.q.tech": "Technicals",
   "kline.chat.q.levels": "Support & resistance",
+  "kline.chat.q.candle": "Candlestick read",
   "kline.chat.q.ann": "Recent filings",
   "kline.chat.q.fin": "Financial highlights",
   "kline.chat.q.peers": "Compare with peers",
