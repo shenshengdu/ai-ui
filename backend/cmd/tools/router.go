@@ -19,6 +19,7 @@ func Handler() http.Handler {
 	mux.HandleFunc("GET /finance/company", financeCompany)
 	mux.HandleFunc("GET /finance/markets", financeMarkets)
 	mux.HandleFunc("GET /finance/live", financeLive)
+	mux.HandleFunc("GET /finance/themes", financeThemesHTTP)
 	mux.HandleFunc("GET /finance/backtests", financeBacktestHTTP)
 	mux.HandleFunc("GET /finance/backtest", financeBacktestHTTP)
 	mux.HandleFunc("POST /finance/backtest/rename", financeBacktestRenameHTTP)
