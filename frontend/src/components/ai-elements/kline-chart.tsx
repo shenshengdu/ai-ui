@@ -270,6 +270,29 @@ export function klineCacheGet(symbol: string, range: Range, now = Date.now()): {
   return null;
 }
 
+/** 图例：在默认的「时间 开 高 低 收 成交量」里加上涨跌额和涨跌幅（带正负号，红涨绿跌） */
+export function changeLegends(prev: { close: number } | null, cur: { close: number }) {
+  const out: { title: string; value: string | { text: string; color: string } }[] = [
+    { title: "time", value: "{time}" },
+    { title: "open", value: "{open}" },
+    { title: "high", value: "{high}" },
+    { title: "low", value: "{low}" },
+    { title: "close", value: "{close}" },
+  ];
+  const pc = prev?.close;
+  if (pc && Number.isFinite(pc) && Number.isFinite(cur.close)) {
+    const d = cur.close - pc;
+    const sign = d > 0 ? "+" : "";
+    const digits = Math.abs(cur.close) < 10 ? 4 : 2;
+    out.push({
+      title: "change",
+      value: { text: `${sign}${d.toFixed(digits)}（${sign}${((d / pc) * 100).toFixed(2)}%）`, color: d > 0 ? UP : d < 0 ? DOWN : "#888888" },
+    });
+  }
+  out.push({ title: "volume", value: "{volume}" });
+  return out;
+}
+
 const AI_GROUP = "ai";
 let aiOverlaysRegistered = false;
 
@@ -448,8 +471,14 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
     chart.setStyles(isDark ? "dark" : "light");
     chart.setStyles({
       yAxis: { position: "left" as YAxisPosition }, // 价格刻度放左边（K 线页右边是聊天框）
-      candle: { bar: { upColor: UP, downColor: DOWN, noChangeColor: "#888888", upBorderColor: UP, downBorderColor: DOWN,
-        upWickColor: UP, downWickColor: DOWN } },
+      candle: {
+        bar: { upColor: UP, downColor: DOWN, noChangeColor: "#888888", upBorderColor: UP, downBorderColor: DOWN,
+          upWickColor: UP, downWickColor: DOWN },
+        // 最新价标记和图例里的涨跌：红涨绿跌，和 K 线一致
+        priceMark: { last: { upColor: UP, downColor: DOWN, noChangeColor: "#888888" } },
+        // 左上角图例：时间、开高低收、涨跌（相对前一根的收盘：日 K = 当日涨跌，周 / 月 K = 当周 / 当月涨跌）、成交量
+        tooltip: { custom: (data: { prev: KLineData | null; current: KLineData }) => changeLegends(data.prev, data.current) },
+      },
       indicator: { bars: [{ upColor: UP + "B3", downColor: DOWN + "B3", noChangeColor: "#888888" }] },
     });
   }, [isDark, version]);
