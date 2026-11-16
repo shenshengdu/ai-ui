@@ -37,7 +37,7 @@ var financeHTTPClient = &http.Client{}
 
 func isFinanceTool(name string) bool {
 	switch name {
-	case "finance_stock", "finance_technical", "finance_valuation", "finance_market", "finance_market_news", "finance_decision", "finance_quote", "finance_global_market", "finance_peer_compare", "finance_peer_group_save", "finance_peer_quant", "finance_warmup_status", "finance_account", "finance_judgement", "finance_macro", "finance_company", "finance_candle":
+	case "finance_stock", "finance_technical", "finance_valuation", "finance_market", "finance_market_news", "finance_decision", "finance_quote", "finance_global_market", "finance_peer_compare", "finance_peer_group_save", "finance_peer_quant", "finance_warmup_status", "finance_account", "finance_judgement", "finance_macro", "finance_company", "finance_candle", "finance_market_review":
 		return true
 	}
 	if isBacktestTool(name) {
@@ -122,11 +122,24 @@ func financeBaseTools() []*Tool {
 			Description: "今日 K 线解读 + 明日展望（A 股、港股、美股）。用户问「今天这根 K 线什么意思」「K 线形态」「明天会怎么走」「明天能涨吗」时用。" +
 				"返回：这根 K 线本身（大中小阴阳线、假阳线、涨跌、实体和上下影线、振幅）；识别出的形态（十字星、锤子线、上吊线、射击之星、吞没、孕线、刺透、乌云盖顶、早晨之星、黄昏之星、红三兵、三只乌鸦、跳空缺口、突破或跌破 20/60 日高低点、A 股涨跌停等）和每个形态在这只股票近几年出现后 1/5/10 日的涨跌统计（和所有交易日比）；" +
 				"量价（和前 20 日均量比的放量缩量、天量地量、放量滞涨等）；位置（均线排列、近 60 日区间位置、前期趋势）；" +
-				"明日展望（outlook）：历史上和今天情况相近的交易日次日的上涨概率和涨跌分布、强弱分界价（站上今日最高 / 跌破今日最低）、上方压力和下方支撑、按近 14 日平均波动估的明日大致区间。" +
+				"每个形态还带全市场统计（patterns[].market：同一市场所有股票 2010 年以来和近 3 年出现这个形态后次日 / 5 日上涨概率，和全市场平时比），先讲全市场再讲这只股票自己的；" +
+				"明日展望（outlook）：全市场和这只股票历史上和今天情况相近的交易日次日的上涨概率和涨跌分布、强弱分界价（站上今日最高 / 跌破今日最低）、上方压力和下方支撑、按近 14 日平均波动估的明日大致区间。" +
 				"provisional=true 表示盘中未收盘（今天这根还会变，量能不比）。" +
 				"回答规则：数字原样引用；先讲今天这根和形态，再讲量价和位置，最后讲明日展望；明日展望只能说成「历史上相近情况下次日上涨的概率是多少、和平时比高还是低」和「关键价位」，" +
 				"不能说成「明天会涨 / 会跌」或给目标价；history.reliable=false 或 analogs.reliable=false 的统计要说明样本少；不给买卖建议。",
 			InputSchema: `{"type":"object","properties":{"symbol":{"type":"string","description":"股票代码。美股如 AAPL；A 股 600519.SH、300750.SZ；港股 0700.HK。"},"years":{"type":"integer","minimum":1,"maximum":15,"description":"历史统计用几年的日线，默认 5"}},"required":["symbol"],"additionalProperties":false}`,
+			IsEnabled:   true,
+		},
+		{
+			ID:   uuid.New().String(),
+			Name: "finance_market_review",
+			Description: "今日大盘复盘（A 股 / 港股 / 美股）：大盘指数的 K 线形态（A 股上证指数、创业板指；港股恒生指数、恒生科技；美股 SPY、QQQ）、" +
+				"市场宽度（上涨下跌家数、成交额和 20 日均额比、A 股涨停跌停、60 日新高新低）、资金流向。" +
+				"A 股资金：东方财富主力净流入（沪深两市今天净流入还是流出、近 5 天几天流入、行业和概念板块主力净流入 / 流出前几名，实时）+ 主线雷达（自己用日线估算的行业资金强弱和热度，每晚更新，看持续性）；" +
+				"美股：11 个板块 ETF 的涨跌、成交额放大、收在高位还是低位（资金代理，不是真实资金流）；港股暂时没有行业。" +
+				"用户要「今日复盘」「大盘怎么样」「资金流向」「资金流入了哪些行业」时用；做个股今日复盘时和 finance_candle 一起用，把个股放到大盘和资金背景里说。" +
+				"数字原样引用并注明数据日期；市场宽度如果日期比今天早，要说明今天的要等晚上数据更新后；errors 里没取到的部分要说明；只描述，不给买卖建议。",
+			InputSchema: `{"type":"object","properties":{"market":{"type":"string","enum":["A","HK","US"],"description":"A 股 / 港股 / 美股"}},"required":["market"],"additionalProperties":false}`,
 			IsEnabled:   true,
 		},
 		{
@@ -371,6 +384,12 @@ func financeTool(ctx context.Context, name, args string) providers.ToolOutput {
 			return financeError("%v", aerr)
 		}
 		path, timeout = ap, 30*time.Second
+	case "finance_market_review":
+		mk := strings.ToUpper(strings.TrimSpace(p.Market))
+		if mk != "A" && mk != "HK" && mk != "US" {
+			return financeError("market 只能是 A、HK、US")
+		}
+		path, timeout = "/api/v1/market_review/"+mk, 90*time.Second
 	case "finance_candle":
 		sym, ok := normalizeSymbol(p.Symbol)
 		if !ok {

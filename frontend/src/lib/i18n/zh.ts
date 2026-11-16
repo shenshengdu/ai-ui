@@ -244,7 +244,7 @@ export const zh: Record<MessageKey, string> = {
   "kline.chat.q.deep": "深度研究",
   "kline.chat.q.tech": "技术面分析",
   "kline.chat.q.levels": "支撑位和压力位",
-  "kline.chat.q.candle": "K线分析",
+  "kline.chat.q.candle": "今日复盘",
   "kline.chat.q.ann": "最近公告解读",
   "kline.chat.q.fin": "财报要点",
   "kline.chat.q.peers": "和同行比较",

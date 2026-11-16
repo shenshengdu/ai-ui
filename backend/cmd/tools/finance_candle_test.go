@@ -45,3 +45,26 @@ func TestFinanceCandleTool(t *testing.T) {
 		t.Fatalf("bad symbol: %s", out.Content)
 	}
 }
+
+func TestFinanceMarketReviewTool(t *testing.T) {
+	if !isFinanceTool("finance_market_review") {
+		t.Fatal("finance_market_review should be a finance tool")
+	}
+	if log == nil {
+		log = logger.New(io.Discard)
+	}
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		_, _ = w.Write([]byte(`{"status":"success","market":"A","summary":["行业主力净流入前 5：半导体 +52.0 亿"]}`))
+	}))
+	defer srv.Close()
+	t.Setenv("FINANCE_BASE_URL", srv.URL)
+	t.Setenv("FINANCE_API_KEY", "k")
+	if out := financeTool(context.Background(), "finance_market_review", `{"market":"a"}`); !strings.Contains(out.Content, "半导体") || gotPath != "/api/v1/market_review/A" {
+		t.Fatalf("review: %s %s", gotPath, out.Content)
+	}
+	if out := financeTool(context.Background(), "finance_market_review", `{"market":"JP"}`); !strings.Contains(out.Content, "market 只能是") {
+		t.Fatalf("bad market: %s", out.Content)
+	}
+}
