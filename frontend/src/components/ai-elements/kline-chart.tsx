@@ -250,9 +250,20 @@ export async function fetchLiveQuote(symbol: string): Promise<LiveQuote | null> 
 
 export const LIVE_REFRESH_MS = 60_000;
 export const LIVE_IDLE_MS = 5 * 60_000;
+export const LIVE_OFFSET_MS = 12_000;
 
 /**
- * 实时行情轮询：马上取一次，之后交易时段每 intervalMs 取一次。
+ * 交易时段下一次取数还要等多久：对齐到「每个周期开始后 offsetMs」这个固定时刻（每分钟的第 12 秒）。
+ * 交易所网页行情按分钟出数：不对齐的话，页面的 60 秒节拍和交易所的 60 秒节拍错开，会时不时隔 2 分钟才看到变化；
+ * 对齐后每次都在新一分钟的数据刚出来时去取，请求次数不变（每分钟 1 次）。
+ */
+export function nextAlignedDelay(now: number, intervalMs = LIVE_REFRESH_MS, offsetMs = LIVE_OFFSET_MS): number {
+  const d = intervalMs - (((now - offsetMs) % intervalMs) + intervalMs) % intervalMs;
+  return d < 5_000 ? d + intervalMs : d; // 离下一个时刻不到 5 秒（刚取过）：跳到再下一个
+}
+
+/**
+ * 实时行情轮询：马上取一次，之后交易时段每 intervalMs 取一次（对齐到每分钟的固定秒数，见 nextAlignedDelay）。
  * 不在交易时段（午休、收盘后）或取不到：改成每 idleMs 看一次，开盘 / 恢复后自动回到 intervalMs（以前是直接停，午休时打开的页面下午不会动）。
  * 页面不可见时不取、也不留定时器；重新可见时马上取一次并恢复。返回停止函数。
  */
@@ -262,6 +273,7 @@ export function startLivePolling(
   intervalMs = LIVE_REFRESH_MS,
   doc: Pick<Document, "hidden" | "addEventListener" | "removeEventListener"> | undefined = typeof document === "undefined" ? undefined : document,
   idleMs = LIVE_IDLE_MS,
+  now: () => number = Date.now,
 ): () => void {
   let stop = false;
   let busy = false;
@@ -278,7 +290,7 @@ export function startLivePolling(
     busy = false;
     if (stop) return;
     if (q) onQuote(q);
-    if (!doc?.hidden) timer = setTimeout(() => void tick(), q?.trading ? intervalMs : idleMs);
+    if (!doc?.hidden) timer = setTimeout(() => void tick(), q?.trading ? nextAlignedDelay(now(), intervalMs) : idleMs);
   };
   const onVisible = () => {
     if (doc?.hidden) clear();
