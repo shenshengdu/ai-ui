@@ -177,14 +177,22 @@ func refreshMCPTools(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Build map of existing tools keyed by name to preserve IDs and user-set flags
-	existingTools := tools.GetAllByMCPServerID(server.ID)
+	if err := applyFreshTools(server.ID, freshTools); err != nil {
+		log.Error("Error saving refreshed tools", "err", err)
+		http.Error(w, "Error saving tools", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// applyFreshTools：把一个服务器的工具换成 freshTools（保留已有工具的 ID、是否启用、是否要确认；新工具用默认值），删掉不再存在的
+func applyFreshTools(serverID string, freshTools []*Tool) error {
+	existingTools := tools.GetAllByMCPServerID(serverID)
 	existingMap := make(map[string]*Tool, len(existingTools))
 	for _, t := range existingTools {
 		existingMap[t.Name] = t
 	}
-
-	// Preserve IDs, is_enabled, and require_approval for existing tools; new tools keep generated IDs and defaults
 	newToolIDs := make([]string, 0, len(freshTools))
 	for _, t := range freshTools {
 		if existing, exists := existingMap[t.Name]; exists {
@@ -194,22 +202,39 @@ func refreshMCPTools(w http.ResponseWriter, r *http.Request) {
 		}
 		newToolIDs = append(newToolIDs, t.ID)
 	}
+	if err := tools.UpsertAll(freshTools); err != nil {
+		return err
+	}
+	return tools.DeleteNotIn(serverID, newToolIDs)
+}
 
-	// Upsert all fields (including schema/description changes) with correct state values
-	if err = tools.UpsertAll(freshTools); err != nil {
-		log.Error("Error saving refreshed tools", "err", err)
-		http.Error(w, "Error saving tools", http.StatusInternalServerError)
+// SyncBuiltInTools：启动时给每个用户的内置工具服务器（default-*）补上新加的内置工具、更新说明，
+// 不用再手动点「刷新」。用户关掉的工具保持关掉。
+func SyncBuiltInTools() {
+	rows, err := db.Query("SELECT id FROM MCPServers WHERE id LIKE 'default-%'")
+	if err != nil {
+		log.Error("Sync built-in tools: list servers failed", "err", err)
 		return
 	}
-
-	// Remove stale tools that no longer exist on the MCP server
-	if err = tools.DeleteNotIn(server.ID, newToolIDs); err != nil {
-		log.Error("Error deleting stale tools", "err", err)
-		http.Error(w, "Error cleaning up stale tools", http.StatusInternalServerError)
-		return
+	var ids []string
+	for rows.Next() {
+		var id string
+		if rows.Scan(&id) == nil {
+			ids = append(ids, id)
+		}
 	}
-
-	w.WriteHeader(http.StatusNoContent)
+	rows.Close()
+	for _, id := range ids {
+		fresh := GetBuiltInTools()
+		for _, t := range fresh {
+			t.MCPServerID = id
+		}
+		if err := applyFreshTools(id, fresh); err != nil {
+			log.Error("Sync built-in tools failed", "server", id, "err", err)
+			continue
+		}
+	}
+	log.Info("Built-in tools synced", "servers", len(ids), "tools", len(GetBuiltInTools()))
 }
 
 func GetMCPTools(server MCPServer) ([]*Tool, error) {
