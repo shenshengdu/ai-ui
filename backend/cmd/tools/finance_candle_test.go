@@ -2,10 +2,13 @@ package tools
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	logger "github.com/charmbracelet/log"
 )
 
 func TestFinanceCandleTool(t *testing.T) {
@@ -18,6 +21,9 @@ func TestFinanceCandleTool(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("finance_candle not registered")
+	}
+	if log == nil { // 正式运行时 SetUpTools 会设好；单独跑这个测试时没有
+		log = logger.New(io.Discard)
 	}
 	var gotPath, gotQuery string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
