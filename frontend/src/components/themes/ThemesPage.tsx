@@ -137,7 +137,10 @@ export function ThemesPage() {
                                 ) : (
                                   <span className="w-3.5" />
                                 )}
-                                <span className="font-medium">{x.industry}</span>
+                                <span className="font-medium" title={x.sector ? `${x.sector} / ${x.industry}` : undefined}>
+                                  {x.industry}
+                                </span>
+                                {x.sector && <span className="hidden text-xs text-muted-foreground lg:inline">{x.sector}</span>}
                                 <span className="text-xs text-muted-foreground">{x.members}</span>
                               </span>
                               {data.history && data.history.length > 1 && (

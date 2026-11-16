@@ -12,6 +12,7 @@ export type Leader = {
 
 export type ThemeIndustry = {
   industry: string;
+  sector?: string | null;
   rank: number;
   score: number | null;
   members: number;
