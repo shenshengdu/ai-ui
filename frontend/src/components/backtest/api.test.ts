@@ -35,3 +35,17 @@ describe("backtest helpers", () => {
     await expect(fetchBacktest("abcdef012345", true, f)).rejects.toThrow("没有这个回测");
   });
 });
+
+import { changeLegends } from "@/components/ai-elements/kline-chart";
+
+describe("kline legend change", () => {
+  it("shows amount and percent vs previous close", () => {
+    const up = changeLegends({ close: 100 }, { close: 101.5 }).find((x) => x.title === "change")!.value as { text: string; color: string };
+    expect(up.text).toBe("+1.50（+1.50%）");
+    expect(up.color).toBe("#F92855");
+    const dn = changeLegends({ close: 386.6 }, { close: 380 }).find((x) => x.title === "change")!.value as { text: string; color: string };
+    expect(dn.text).toBe("-6.60（-1.71%）");
+    expect(dn.color).toBe("#2DC08E");
+    expect(changeLegends(null, { close: 5 }).some((x) => x.title === "change")).toBe(false);
+  });
+});
