@@ -249,9 +249,11 @@ export async function fetchLiveQuote(symbol: string): Promise<LiveQuote | null> 
 }
 
 export const LIVE_REFRESH_MS = 60_000;
+export const LIVE_IDLE_MS = 5 * 60_000;
 
 /**
- * 实时行情轮询：马上取一次，之后交易时段每 intervalMs 取一次；不在交易时段（或连续 3 次取不到）就停。
+ * 实时行情轮询：马上取一次，之后交易时段每 intervalMs 取一次。
+ * 不在交易时段（午休、收盘后）或取不到：改成每 idleMs 看一次，开盘 / 恢复后自动回到 intervalMs（以前是直接停，午休时打开的页面下午不会动）。
  * 页面不可见时不取、也不留定时器；重新可见时马上取一次并恢复。返回停止函数。
  */
 export function startLivePolling(
@@ -259,11 +261,10 @@ export function startLivePolling(
   onQuote: (q: LiveQuote) => void,
   intervalMs = LIVE_REFRESH_MS,
   doc: Pick<Document, "hidden" | "addEventListener" | "removeEventListener"> | undefined = typeof document === "undefined" ? undefined : document,
+  idleMs = LIVE_IDLE_MS,
 ): () => void {
   let stop = false;
-  let done = false; // 收盘了 / 一直取不到：不再轮询
   let busy = false;
-  let fails = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const clear = () => {
     if (timer) clearTimeout(timer);
@@ -271,19 +272,13 @@ export function startLivePolling(
   };
   const tick = async () => {
     clear();
-    if (stop || done || busy || doc?.hidden) return;
+    if (stop || busy || doc?.hidden) return;
     busy = true;
     const q = await fetchQuote().catch(() => null);
     busy = false;
     if (stop) return;
-    if (q) {
-      fails = 0;
-      onQuote(q);
-      done = !q.trading;
-    } else if (++fails >= 3) {
-      done = true;
-    }
-    if (!done && !doc?.hidden) timer = setTimeout(() => void tick(), intervalMs);
+    if (q) onQuote(q);
+    if (!doc?.hidden) timer = setTimeout(() => void tick(), q?.trading ? intervalMs : idleMs);
   };
   const onVisible = () => {
     if (doc?.hidden) clear();
@@ -455,7 +450,7 @@ export function KlineChart({ code, spec: specProp, height = 320, pageMode = fals
     };
   }, [spec, range]);
 
-  // 盘中实时这一根：交易时段每 60 秒刷新，收盘后停；页面切到后台（标签页不可见）就完全暂停，切回来马上取一次再继续
+  // 盘中实时这一根：交易时段每 60 秒刷新；午休、收盘后每 5 分钟看一次（开盘自动恢复）；页面切到后台就完全暂停，切回来马上取一次
   const liveSymbol = spec && isLiveSymbol(spec.symbol) ? spec.symbol.toUpperCase() : "";
   useEffect(() => {
     setLive(null);
