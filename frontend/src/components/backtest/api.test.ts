@@ -64,13 +64,13 @@ describe("live polling", () => {
       count: () => ls.length,
     };
   };
-  it("polls every 60s while trading, pauses when hidden, stops after close", async () => {
+  it("polls every 60s while trading, pauses when hidden, slows down when closed and resumes at open", async () => {
     vi.useFakeTimers();
     const doc = fakeDoc();
     let trading = true;
     const fetchQuote = vi.fn(async (): Promise<LiveQuote | null> => ({ trading }));
     const got: LiveQuote[] = [];
-    const stop = startLivePolling(fetchQuote, (q) => got.push(q), 60_000, doc as unknown as Document);
+    const stop = startLivePolling(fetchQuote, (q) => got.push(q), 60_000, doc as unknown as Document, 300_000);
     await vi.advanceTimersByTimeAsync(0);
     expect(fetchQuote).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(59_000);
@@ -85,22 +85,29 @@ describe("live polling", () => {
     doc.fire();
     await vi.advanceTimersByTimeAsync(0);
     expect(fetchQuote).toHaveBeenCalledTimes(3);
-    trading = false; // 收盘：取到这一次后停
+    trading = false; // 午休 / 收盘：改成每 5 分钟看一次
     await vi.advanceTimersByTimeAsync(60_000);
     expect(fetchQuote).toHaveBeenCalledTimes(4);
-    await vi.advanceTimersByTimeAsync(600_000);
+    await vi.advanceTimersByTimeAsync(299_000);
     expect(fetchQuote).toHaveBeenCalledTimes(4);
-    expect(got.length).toBe(4);
+    trading = true; // 开盘：下一次检查发现在交易，回到每 60 秒
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(fetchQuote).toHaveBeenCalledTimes(5);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetchQuote).toHaveBeenCalledTimes(6);
+    expect(got.length).toBe(6);
     stop();
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(fetchQuote).toHaveBeenCalledTimes(6);
     expect(doc.count()).toBe(0);
     vi.useRealTimers();
   });
-  it("gives up after 3 failures", async () => {
+  it("keeps checking slowly when the quote can't be fetched", async () => {
     vi.useFakeTimers();
     const fetchQuote = vi.fn(async () => null);
-    const stop = startLivePolling(fetchQuote, () => {}, 1000, fakeDoc() as unknown as Document);
-    await vi.advanceTimersByTimeAsync(10_000);
-    expect(fetchQuote).toHaveBeenCalledTimes(3);
+    const stop = startLivePolling(fetchQuote, () => {}, 1000, fakeDoc() as unknown as Document, 5000);
+    await vi.advanceTimersByTimeAsync(10_500);
+    expect(fetchQuote).toHaveBeenCalledTimes(3); // 0s、5s、10s：按慢的间隔
     stop();
     vi.useRealTimers();
   });
