@@ -550,6 +550,7 @@ export const en = {
   "bt.deleteDesc": "This permanently deletes “{name}” and its results. A queued backtest is cancelled.",
   "bt.market": "Market",
   "bt.costsText2": "commission {c} · stamp tax buy {sb} / sell {s} · slippage {sl}",
+  "bt.bufferText": " · holdings kept while ranked in the top {n}",
   "bt.back": "Back",
   "bt.notFound": "Backtest not found",
   "bt.cagr": "CAGR",

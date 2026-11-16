@@ -33,6 +33,7 @@ export const EXCLUDE: Record<string, L> = {
 };
 
 export const REBALANCE: Record<string, L> = {
+  daily: { zh: "每日", en: "Daily" },
   weekly: { zh: "每周", en: "Weekly" },
   monthly: { zh: "每月", en: "Monthly" },
   quarterly: { zh: "每季度", en: "Quarterly" },
@@ -57,6 +58,8 @@ const OP: Record<string, L> = {
   ">=": { zh: "≥", en: "≥" },
   "<": { zh: "<", en: "<" },
   "<=": { zh: "≤", en: "≤" },
+  "==": { zh: "=", en: "=" },
+  "!=": { zh: "≠", en: "≠" },
   between: { zh: "介于", en: "between" },
   top_pct: { zh: "前", en: "top" },
   bottom_pct: { zh: "后", en: "bottom" },
@@ -70,6 +73,11 @@ export function label(map: Record<string, L>, k: string | undefined, lang: strin
 
 export function filterText(f: NonNullable<Spec["filters"]>[number], name: string, lang: string): string {
   const op = label(OP, f.op, lang);
+  // 「是 / 否」类技术因子（1 / 0）：直接写 是 / 否
+  if ((f.op === "==" || f.op === "!=") && (f.value === 1 || f.value === 0) && /（1 是? ?\/ ?0 ?否?）|1 \/ 0/.test(name)) {
+    const yes = (f.op === "==") === (f.value === 1);
+    return `${name.replace(/（1[^）]*）/, "").trim()}：${yes ? (lang === "zh" ? "是" : "yes") : lang === "zh" ? "否" : "no"}`;
+  }
   if (f.op === "between" && Array.isArray(f.value)) return `${name} ${op} ${f.value[0]} ~ ${f.value[1]}`;
   if (f.op === "top_pct" || f.op === "bottom_pct") return `${name} ${op} ${f.value}%`;
   return `${name} ${op} ${f.value}`;

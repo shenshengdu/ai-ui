@@ -42,14 +42,16 @@ name 必填，用简短中文概括策略（如「低估值高ROE」）。讲给
  "universe":{"pool":"见下","exclude":["new_listed_365d","suspended"],"min_avg_amount":30000000,"industries":["行业名关键词，只有 A 股能用，可省略"]},
  "filters":[{"factor":"roe","op":">","value":10},{"factor":"pe_ttm","op":"between","value":[0,30]},{"factor":"mom_6m","op":"top_pct","value":30}],
  "rank":[{"factor":"ep","weight":0.5},{"factor":"roe","weight":0.3},{"factor":"vol_60d","weight":0.2,"order":"asc"}],
- "hold":20,"rebalance":"weekly|monthly|quarterly","weighting":"equal","period":["2015-01-01",null],"benchmark":"见下",
+ "hold":20,"rebalance":"daily|weekly|monthly|quarterly","buffer":1,"weighting":"equal","period":["2015-01-01",null],"benchmark":"见下",
  "costs":{"commission":0.00025,"stamp_tax_buy":0,"stamp_tax_sell":0.0005,"slippage":0.001}}
 各市场（省略的字段用该市场默认值）：
 - A：pool all_a|hs300|zz500|zz1000|sz50；exclude 可选 st、new_listed_365d、suspended；成交额门槛默认 3000 万元；benchmark 000300.SH|000905.SH|000852.SH|000016.SH|000001.SH|399006.SZ（默认沪深300）；有涨跌停；印花税卖出 0.05%。
 - HK：pool all_hk；exclude 可选 new_listed_365d、suspended；门槛默认 2000 万港元；benchmark HSI.HK|HSCEI.HK|HSTECH.HK（默认恒指；恒生科技 2020-08 起才有）；无涨跌停；印花税买卖各 0.1%；估值用财报算（人民币 / 美元报表折港币）；没有市销率、市现率。
 - US：pool all_us（普通股，不含 ETF）；exclude 可选 new_listed_365d、suspended；门槛默认 2000 万美元；benchmark SPX|NDX（默认标普500）；无涨跌停、无印花税；估值用 SEC 财报算；多一个 mcap（总市值）。
 港股、美股的库里没有已退市股票：结果偏乐观，讲策略和解读结果时都要告诉用户。
-op：> >= < <= between top_pct bottom_pct（百分比 0~100）；rank 每个因子先横截面排名再按 weight 加权，order 省略用因子默认方向（asc=越小越好）；
+技术面因子（三个市场都能用，名字和说明以 finance_backtest_factors 返回的为准）：均线偏离 ma_dev_5/10/20/60/120/250、多头排列 ma_bull_20_60 等、金叉死叉 ma_gold_5_20 / ma_dead_20_60 等、MACD（macd_dif / macd_dea / macd_hist / macd_above_zero / macd_gold / macd_dead / macd_hist_up）、布林线 boll_pctb / boll_width、rsi_6 / rsi_14、kdj_k / kdj_d / kdj_j / kdj_gold、atr_pct、量比 vol_ratio_5_20 / vol_ratio_5_60 / vol_ratio_1_20、突破 breakout_20/60/250、放量突破 vol_breakout_20、high_52w_dist / low_52w_dist、up_days_5。参数是固定的常用值，不能自定义（用户要别的参数就说明目前不支持）。「是 / 否」类因子取 1 / 0，筛选用 {"op":"==","value":1}。技术面和基本面因子可以混用。rank 至少要 1 个因子（纯技术筛选时可以用 vol_ratio_5_20、macd_hist、ma_dev_20 之类排序）。
+技术面策略通常用 weekly 或 daily 调仓；daily 换手高，buffer（缓冲带，1~5）= 已持有的股票只要还排在前 hold×buffer 名内就不卖，daily 默认 2、其他默认 1；daily 的回测慢（可能十几分钟到几十分钟），提交前告诉用户。目前做不到：逐只股票的信号当天买卖、止损止盈、大盘择时、自定义指标参数。
+op：> >= < <= == != between top_pct bottom_pct（百分比 0~100）；rank 每个因子先横截面排名再按 weight 加权，order 省略用因子默认方向（asc=越小越好）；
 hold 1~100 只等权；period 起点不早于 2010-01-01、至少 1 年，终点 null = 最新。因子名先用 finance_backtest_factors（带 market）查，各市场能用的不一样。`
 
 func financeBacktestTools() []*Tool {
