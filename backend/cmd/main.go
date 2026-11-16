@@ -77,6 +77,7 @@ func setupLogger() {
 
 func setupTools() {
 	tools.SetUpTools(log, db)
+	tools.SyncBuiltInTools() // 新加的内置工具自动给所有用户补上（不用手动点刷新）
 	log.Info("Tools set up successfully")
 }
 

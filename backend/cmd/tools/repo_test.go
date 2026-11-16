@@ -2,6 +2,7 @@ package tools
 
 import (
 	"database/sql"
+	"io"
 	"os"
 	"path"
 	"testing"
@@ -413,5 +414,45 @@ func TestRefreshFlow_UpdatesSchemaPreservesFlags(t *testing.T) {
 	}
 	if brandNew.Description != "New tool" {
 		t.Errorf("brand_new description wrong: got %q", brandNew.Description)
+	}
+}
+
+func TestSyncBuiltInTools_AddsNewKeepsFlags(t *testing.T) {
+	tdb, toolRepo := setupTestDB(t)
+	log = logger.New(io.Discard)
+	db = tdb
+	mcps = NewMCPRepository(tdb, toolRepo)
+	tools = toolRepo
+
+	user := "olduser"
+	if _, err := tdb.Exec("INSERT INTO Users (username, pass_hash) VALUES (?, 'hash')", user); err != nil {
+		t.Fatalf("insert user: %v", err)
+	}
+	SaveDefaultMCPServer(user)
+	serverID := "default-" + user
+	// 模拟老用户：少了两个后来加的工具，且用户关掉了 finance_quote
+	if _, err := tdb.Exec("DELETE FROM Tools WHERE mcp_server_id=? AND name IN ('finance_candle','finance_market_review')", serverID); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if _, err := tdb.Exec("UPDATE Tools SET is_enabled=0 WHERE mcp_server_id=? AND name='finance_quote'", serverID); err != nil {
+		t.Fatalf("disable: %v", err)
+	}
+
+	SyncBuiltInTools()
+
+	got := map[string]*Tool{}
+	for _, tl := range toolRepo.GetAllByMCPServerID(serverID) {
+		got[tl.Name] = tl
+	}
+	for _, n := range []string{"finance_candle", "finance_market_review", "finance_market_themes"} {
+		if tl, ok := got[n]; !ok || !tl.IsEnabled {
+			t.Fatalf("%s not synced/enabled: %+v", n, tl)
+		}
+	}
+	if got["finance_quote"] == nil || got["finance_quote"].IsEnabled {
+		t.Fatal("user-disabled tool should stay disabled")
+	}
+	if len(got) != len(GetBuiltInTools()) {
+		t.Fatalf("tool count %d, want %d", len(got), len(GetBuiltInTools()))
 	}
 }
