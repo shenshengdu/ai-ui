@@ -35,6 +35,7 @@ import {
   SearchIcon,
   CandlestickChartIcon,
   FlaskConicalIcon,
+  FlameIcon,
   SettingsIcon,
   SquarePenIcon,
   SunMoonIcon,
@@ -278,6 +279,13 @@ export const ConversationSidebar = ({
             <CandlestickChartIcon className="size-[18px]" />
           </RailButton>
           <RailButton
+            label={t("sidebar.themes")}
+            onClick={() => navigateTo("/themes")}
+            aria-label={t("sidebar.themes")}
+          >
+            <FlameIcon className="size-[18px]" />
+          </RailButton>
+          <RailButton
             label={t("sidebar.backtest")}
             onClick={() => navigateTo("/backtest")}
             aria-label={t("sidebar.backtest")}
@@ -352,6 +360,11 @@ export const ConversationSidebar = ({
               icon={<CandlestickChartIcon />}
               label={t("sidebar.kline")}
               onClick={() => navigateTo("/kline")}
+            />
+            <NavRow
+              icon={<FlameIcon />}
+              label={t("sidebar.themes")}
+              onClick={() => navigateTo("/themes")}
             />
             <NavRow
               icon={<FlaskConicalIcon />}

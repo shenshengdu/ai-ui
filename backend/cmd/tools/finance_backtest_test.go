@@ -232,3 +232,33 @@ func TestBacktestMarket(t *testing.T) {
 		t.Fatalf("market required: %s", out.Content)
 	}
 }
+
+func TestMarketThemes(t *testing.T) {
+	var gotPath, gotQuery string
+	backtestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotQuery = r.URL.Path, r.URL.RawQuery
+		_, _ = w.Write([]byte(`{"status":"success","date":"2026-11-16","industries":[{"industry":"半导体","rank":1}]}`))
+	})
+	if out := backtestTool(context.Background(), "finance_market_themes", `{}`); !strings.Contains(out.Content, "半导体") || gotPath != "/api/v1/themes" || gotQuery != "" {
+		t.Fatalf("latest: %s %s %s", gotPath, gotQuery, out.Content)
+	}
+	if out := backtestTool(context.Background(), "finance_market_themes", `{"date":"2026-11-13"}`); !strings.Contains(out.Content, "半导体") || gotQuery != "date=2026-11-13" {
+		t.Fatalf("date: %s %s", gotQuery, out.Content)
+	}
+	if out := backtestTool(context.Background(), "finance_market_themes", `{"date":"x&y"}`); !strings.Contains(out.Content, "date 格式") {
+		t.Fatalf("bad date: %s", out.Content)
+	}
+	rec := httptest.NewRecorder()
+	financeThemesHTTP(rec, httptest.NewRequest("GET", "/finance/themes?date=2026-11-13", nil))
+	if rec.Code != 200 || gotQuery != "date=2026-11-13" {
+		t.Fatalf("http: %d %s", rec.Code, gotQuery)
+	}
+	rec = httptest.NewRecorder()
+	financeThemesHTTP(rec, httptest.NewRequest("GET", "/finance/themes?date=../x", nil))
+	if rec.Code != 400 {
+		t.Fatalf("http bad: %d", rec.Code)
+	}
+	if !isFinanceTool("finance_market_themes") {
+		t.Fatal("not registered")
+	}
+}

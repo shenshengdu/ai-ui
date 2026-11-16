@@ -6,6 +6,8 @@ package tools
 //   finance_backtest_get     -> GET  /api/v1/backtest/{id}
 //   finance_backtest_list    -> GET  /api/v1/backtests?limit=
 //   finance_backtest_rename  -> PATCH /api/v1/backtest/{id} {name}
+//   finance_market_themes    -> GET  /api/v1/themes?date=（A 股主线雷达）
+// 页面：GET /api/tools/finance/themes?date=（/themes 主线雷达页）
 // 页面：GET /api/tools/finance/backtests、/api/tools/finance/backtest?id=（右侧回测列表、/backtest/:id 详情页）
 //       POST /api/tools/finance/backtest/rename {id, name}（详情页标题旁改名）
 //       POST /api/tools/finance/backtest/delete {id}（详情页删除；正在跑的平台返回 409）
@@ -29,6 +31,7 @@ import (
 )
 
 var backtestIDRe = regexp.MustCompile(`^[0-9a-f]{12}$`)
+var themeDateRe = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 
 // 测试里改短
 var (
@@ -49,7 +52,8 @@ name 必填，用简短中文概括策略（如「低估值高ROE」）。讲给
 - HK：pool all_hk；exclude 可选 new_listed_365d、suspended；门槛默认 2000 万港元；benchmark HSI.HK|HSCEI.HK|HSTECH.HK（默认恒指；恒生科技 2020-08 起才有）；无涨跌停；印花税买卖各 0.1%；估值用财报算（人民币 / 美元报表折港币）；没有市销率、市现率。
 - US：pool all_us（普通股，不含 ETF）；exclude 可选 new_listed_365d、suspended；门槛默认 2000 万美元；benchmark SPX|NDX（默认标普500）；无涨跌停、无印花税；估值用 SEC 财报算；多一个 mcap（总市值）。
 港股、美股的库里没有已退市股票：结果偏乐观，讲策略和解读结果时都要告诉用户。
-技术面因子（三个市场都能用，名字和说明以 finance_backtest_factors 返回的为准）：均线偏离 ma_dev_5/10/20/60/120/250、多头排列 ma_bull_20_60 等、金叉死叉 ma_gold_5_20 / ma_dead_20_60 等、MACD（macd_dif / macd_dea / macd_hist / macd_above_zero / macd_gold / macd_dead / macd_hist_up）、布林线 boll_pctb / boll_width、rsi_6 / rsi_14、kdj_k / kdj_d / kdj_j / kdj_gold、atr_pct、量比 vol_ratio_5_20 / vol_ratio_5_60 / vol_ratio_1_20、突破 breakout_20/60/250、放量突破 vol_breakout_20、high_52w_dist / low_52w_dist、up_days_5。参数是固定的常用值，不能自定义（用户要别的参数就说明目前不支持）。「是 / 否」类因子取 1 / 0，筛选用 {"op":"==","value":1}。技术面和基本面因子可以混用。rank 至少要 1 个因子（纯技术筛选时可以用 vol_ratio_5_20、macd_hist、ma_dev_20 之类排序）。
+技术面因子（三个市场都能用，名字和说明以 finance_backtest_factors 返回的为准）：均线偏离 ma_dev_5/10/20/60/120/250、多头排列 ma_bull_20_60 等、金叉死叉 ma_gold_5_20 / ma_dead_20_60 等、MACD（macd_dif / macd_dea / macd_hist / macd_above_zero / macd_gold / macd_dead / macd_hist_up）、布林线 boll_pctb / boll_width、rsi_6 / rsi_14、kdj_k / kdj_d / kdj_j / kdj_gold、atr_pct、量比 vol_ratio_5_20 / vol_ratio_5_60 / vol_ratio_1_20、突破 breakout_20/60/250、放量突破 vol_breakout_20、high_52w_dist / low_52w_dist、up_days_5。资金强弱（日线估算，不是逐笔大单）：cmf_20（−1~1，> 0 买方占优）、mfi_14（0~100）。参数是固定的常用值，不能自定义（用户要别的参数就说明目前不支持）。「是 / 否」类因子取 1 / 0，筛选用 {"op":"==","value":1}。技术面和基本面因子可以混用。rank 至少要 1 个因子（纯技术筛选时可以用 vol_ratio_5_20、macd_hist、ma_dev_20 之类排序）。
+行业因子（只有 A 股；按东财行业，用的是现在的分类，早年有偏差，讲给用户时要说）：ind_ret_5/20/60（行业平均涨跌）、ind_amt_chg（行业成交额占比 5 日比 60 日变化）、ind_breadth_20（行业里站上 20 日线的比例）、ind_flow_20（行业资金强弱）、ind_limit_up_5（行业近 5 日涨停次数）、ind_score（行业热度 0~100）、ind_rank（行业热度排名，1 最热，筛选如 {"factor":"ind_rank","op":"<=","value":5}）、ind_rel_20（个股比行业多涨的百分点）。「买主线里的强势股」= ind_rank 筛前几名 + ind_rel_20 / mom 排序。
 技术面策略通常用 weekly 或 daily 调仓；daily 换手高，buffer（缓冲带，1~5）= 已持有的股票只要还排在前 hold×buffer 名内就不卖，daily 默认 2、其他默认 1；daily 的回测慢（可能十几分钟到几十分钟），提交前告诉用户。目前做不到：逐只股票的信号当天买卖、止损止盈、大盘择时、自定义指标参数。
 op：> >= < <= == != between top_pct bottom_pct（百分比 0~100）；rank 每个因子先横截面排名再按 weight 加权，order 省略用因子默认方向（asc=越小越好）；
 hold 1~100 只等权；period 起点不早于 2010-01-01、至少 1 年，终点 null = 最新。因子名先用 finance_backtest_factors（带 market）查，各市场能用的不一样。`
@@ -88,6 +92,14 @@ func financeBacktestTools() []*Tool {
 		InputSchema: `{"type":"object","properties":{"id":{"type":"string","description":"回测 id，12 位十六进制"},"name":{"type":"string","description":"新名字"}},"required":["id","name"],"additionalProperties":false}`,
 		IsEnabled:   true,
 	}, {
+		ID:   uuid.New().String(),
+		Name: "finance_market_themes",
+		Description: "A 股市场主线雷达（每个交易日收盘后算好）：按东财行业的热度排名（0~100 分，由 20 日 / 5 日涨幅、成交额占全市场比例的变化、站上 20 日线的比例、资金强弱、涨停次数合成）、" +
+			"每个行业连续几天在前 10、5 天前排第几、前排行业的龙头股，以及最近 10 个交易日的前排名单（看轮动）。用户问「现在的主线 / 热点板块 / 资金在往哪里去」时用。" +
+			"资金强弱是用日线估算的（收盘在当天高低位之间的位置 × 成交额），不是逐笔大单统计，引用时要说明；只描述现状，不给买卖建议。想验证「跟主线」有没有用，可以用行业因子 ind_* 回测。",
+		InputSchema: `{"type":"object","properties":{"date":{"type":"string","description":"YYYY-MM-DD，省略 = 最新一天"}},"additionalProperties":false}`,
+		IsEnabled:   true,
+	}, {
 		ID:          uuid.New().String(),
 		Name:        "finance_backtest_list",
 		Description: "最近的回测列表（id、策略名、第几次、状态、年化、最大回撤、夏普、超额、随机对照百分位）。用户说「上次那个回测」「之前跑过的」时用它找 id。",
@@ -98,7 +110,7 @@ func financeBacktestTools() []*Tool {
 
 func isBacktestTool(name string) bool {
 	switch name {
-	case "finance_backtest_factors", "finance_backtest_run", "finance_backtest_get", "finance_backtest_list", "finance_backtest_rename":
+	case "finance_backtest_factors", "finance_backtest_run", "finance_backtest_get", "finance_backtest_list", "finance_backtest_rename", "finance_market_themes":
 		return true
 	}
 	return false
@@ -201,6 +213,7 @@ func backtestTool(ctx context.Context, name, args string) providers.ToolOutput {
 		Limit         int            `json:"limit"`
 		Name          string         `json:"name"`
 		Market        string         `json:"market"`
+		Date          string         `json:"date"`
 	}
 	if strings.TrimSpace(args) != "" {
 		if err := json.Unmarshal([]byte(args), &p); err != nil {
@@ -218,6 +231,19 @@ func backtestTool(ctx context.Context, name, args string) providers.ToolOutput {
 		return body, nil
 	}
 	switch name {
+	case "finance_market_themes":
+		path := "/api/v1/themes"
+		if d := strings.TrimSpace(p.Date); d != "" {
+			if !themeDateRe.MatchString(d) {
+				return financeError("date 格式：2026-11-16")
+			}
+			path += "?date=" + d
+		}
+		body, err := get(path)
+		if err != nil {
+			return financeError("%v", err)
+		}
+		return providers.ToolOutput{Content: string(body)}
 	case "finance_backtest_factors":
 		mk := strings.ToUpper(strings.TrimSpace(p.Market))
 		if mk == "" {
@@ -422,6 +448,33 @@ func financeBacktestHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.WriteHeader(http.StatusBadGateway)
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "error", "error": "回测服务连不上"})
+		return
+	}
+	if code < 200 || code > 299 {
+		w.WriteHeader(code)
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "error", "error": backtestErrText(code, body)})
+		return
+	}
+	_, _ = w.Write(body)
+}
+
+// 页面用：GET /api/tools/finance/themes?date=
+func financeThemesHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	path := "/api/v1/themes"
+	if d := r.URL.Query().Get("date"); d != "" {
+		if !themeDateRe.MatchString(d) {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"status":"error","error":"date 格式：2026-11-16"}`))
+			return
+		}
+		path += "?date=" + d
+	}
+	code, body, err := backtestCall(r.Context(), http.MethodGet, path, nil, 30*time.Second)
+	if err != nil {
+		w.WriteHeader(http.StatusBadGateway)
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "error", "error": "主线雷达连不上"})
 		return
 	}
 	if code < 200 || code > 299 {
